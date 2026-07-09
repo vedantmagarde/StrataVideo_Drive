@@ -1,64 +1,79 @@
 import fs from 'fs';
-import { downloadQueue } from './queue.js';
+import path from 'path';
+import { v4 as uuidv4 } from 'uuid';
+import { downloadQueue } from './queues.js';
 import Job from '../models/Job.js';
 import File from '../models/File.js';
-import { decryptBuffer } from '../utils/cryptoUtils.js';
+import { decode } from '../utils/decoder.js';
+import { reassembleChunks } from '../utils/chunker.js';
+// We will create mailer.js in Phase 8
+import { sendDownloadReady } from '../utils/mailer.js';
 
-downloadQueue.process('process-download', async (bullJob) => {
-    const { fileId, jobId, userEmail } = bullJob.data;
-    
+downloadQueue.process(async (bullJob) => {
+    const { fileId, jobId, ownerEmail } = bullJob.data;
+
+    let outputPath;
+
     try {
-        await Job.findByIdAndUpdate(jobId, { status: 'processing', progress: 10 });
-        
+        await Job.findByIdAndUpdate(jobId, { status: 'processing', progress: 5 });
+
         const file = await File.findById(fileId);
-        
+
         if (!file || file.status !== 'ready') {
             throw new Error("File not ready");
         }
 
-        bullJob.progress(30);
-        await Job.findByIdAndUpdate(jobId, { progress: 30 });
+        const totalChunks = file.chunks.length;
+        const chunkBuffers = [];
 
-        // 1. Fetch Video via yt-dlp
-        // --- PSEUDOCODE ---
-        // for (let chunk of file.chunks) {
-        //     await ytdlp.exec(`https://youtube.com/watch?v=${chunk.videoId}`, { o: `temp_video_${chunk.chunkIndex}.mp4` });
-        // }
-        // ------------------
+        for (let i = 0; i < totalChunks; i++) {
+            const chunk = file.chunks[i];
 
-        bullJob.progress(50);
-        await Job.findByIdAndUpdate(jobId, { progress: 50 });
+            // a. decode chunk
+            const tempDir = './tmp';
+            const chunkBuf = await decode(chunk.videoId, chunk.youtubeAccountEmail, ownerEmail, tempDir);
 
-        // 2. Extract frames via FFmpeg and decode blocks
-        // --- PSEUDOCODE ---
-        // const rsEncodedBuffer = await decodeVideoToBuffer(`temp_video_0.mp4`);
-        // ------------------
-        
-        // 3. Reed-Solomon Decoding
-        // --- PSEUDOCODE ---
-        // const rs = new ReedSolomon(...);
-        // const encryptedBuffer = rs.decode(rsEncodedBuffer);
-        // ------------------
+            // b. collect chunk buffer
+            chunkBuffers.push({ chunkIndex: chunk.chunkIndex, data: chunkBuf });
 
-        // Mock encryptedBuffer since we skipped actual DL/Encode
-        const encryptedBuffer = Buffer.from("mock_encrypted_data");
+            // c. update progress
+            const prog = 5 + Math.floor(((i + 1) / totalChunks) * 85);
+            bullJob.progress(prog);
+            await Job.findByIdAndUpdate(jobId, { progress: prog });
+        }
 
-        bullJob.progress(80);
-        await Job.findByIdAndUpdate(jobId, { progress: 80 });
+        // 4. reassembleChunks
+        const finalBuffer = reassembleChunks(chunkBuffers);
 
-        // 4. Decrypt Buffer
-        // const decryptedBuffer = decryptBuffer(encryptedBuffer, userEmail); // would crash on mock data
-        
-        // 5. Save to temp file for user to download via another API endpoint
-        // fs.writeFileSync(`downloads/${fileId}`, decryptedBuffer);
+        // 5. write final file to /tmp/uuid_filename
+        const safeFilename = file.filename.replace(/[^a-zA-Z0-9.\-_]/g, '_');
+        outputPath = path.join('./tmp', `${uuidv4()}_${safeFilename}`);
+        fs.writeFileSync(outputPath, finalBuffer);
 
-        await Job.findByIdAndUpdate(jobId, { status: 'ready', progress: 100 });
-        
-        return { success: true, fileId };
+        // 6. Set Job status -> ready with outputPath
+        await Job.findByIdAndUpdate(jobId, { status: 'ready', progress: 100, outputPath });
+
+        // 7. sendDownloadReady email
+        await sendDownloadReady(ownerEmail, file.filename);
+
+        // 8. auto-delete temp file after 10 minutes
+        setTimeout(() => {
+            if (fs.existsSync(outputPath)) {
+                fs.unlinkSync(outputPath);
+                console.log(`Auto-deleted downloaded file: ${outputPath}`);
+            }
+        }, 10 * 60 * 1000);
+
+        return { success: true, fileId, outputPath };
 
     } catch (error) {
         console.error("Download Job Error:", error);
         await Job.findByIdAndUpdate(jobId, { status: 'failed', error: error.message });
+
+        if (outputPath && fs.existsSync(outputPath)) {
+            fs.unlinkSync(outputPath);
+        }
+
         throw error;
     }
 });

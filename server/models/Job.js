@@ -24,6 +24,7 @@ const jobSchema = new mongoose.Schema({
     default: 0
   },
   error: String,
+  outputPath: String,
   createdAt: {
     type: Date,
     default: Date.now

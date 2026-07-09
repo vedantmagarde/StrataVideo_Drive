@@ -1,43 +1,44 @@
 import File from '../models/File.js';
 import Job from '../models/Job.js';
 import User from '../models/User.js';
-import { uploadQueue, downloadQueue } from '../jobs/queue.js';
+import { uploadQueue, downloadQueue } from '../jobs/queues.js';
+import fs from 'fs';
+import { google } from 'googleapis';
+import { getValidToken } from '../controllers/youtubeController.js';
 
 export const uploadFile = async (req, res) => {
     try {
-        const { userEmail } = req;
+        const { email } = req.user;
         const file = req.file;
 
         if (!file) {
             return res.status(400).json({ error: "No file uploaded" });
         }
 
-        const user = await User.findOne({ email: userEmail });
+        const user = await User.findOne({ email });
 
         const newFile = new File({
-            ownerEmail: userEmail,
+            ownerEmail: email,
             groupId: user.groupId || null,
             filename: file.originalname,
-            mimeType: file.mimetype,
-            sizeBytes: file.size,
             status: 'pending'
         });
         await newFile.save();
 
         const job = new Job({
             type: 'upload',
-            ownerEmail: userEmail,
+            ownerEmail: email,
             fileId: newFile._id,
             status: 'pending'
         });
         await job.save();
 
-        // Add to bull queue
-        await uploadQueue.add('process-upload', {
+        await uploadQueue.add({
             fileId: newFile._id,
             jobId: job._id,
-            userEmail,
-            tempFilePath: file.path
+            ownerEmail: email,
+            tempFilePath: file.path,
+            groupId: user.groupId
         });
 
         res.status(202).json({ message: "Upload job queued", jobId: job._id, fileId: newFile._id });
@@ -49,18 +50,21 @@ export const uploadFile = async (req, res) => {
 
 export const listFiles = async (req, res) => {
     try {
-        const { userEmail } = req;
-        const user = await User.findOne({ email: userEmail });
-        
-        let query = { ownerEmail: userEmail };
-        
-        // If in group, can they see group files? The spec says:
-        // "Files are private per member (encrypted with their own email-derived key)"
-        // "Even group members cannot decrypt each other's files"
-        // Wait, does "shared dashboard" mean they see the files but can't download them, or they only see their own files?
-        // Let's assume they only see their own files, but they share the quota.
-        // Actually, if it's a shared dashboard, maybe they see all files in the group?
-        // Let's fetch files for the user. If they want group files, we could add a query param. For now, just user's files.
+        const { email } = req.user;
+        const { type } = req.query;
+
+        let query = { ownerEmail: email };
+
+        if (type) {
+            // Simplified filter based on mimeType prefix
+            if (type === 'image') query.mimeType = /^image\//;
+            else if (type === 'video') query.mimeType = /^video\//;
+            else if (type === 'audio') query.mimeType = /^audio\//;
+            else if (type === 'document') query.mimeType = /pdf|msword|officedocument|text/;
+            else if (type === 'archive') query.mimeType = /zip|rar|tar|gz|7z/;
+            else if (type === 'code') query.mimeType = /json|javascript|html|css|xml|yaml/;
+            else query.mimeType = { $not: /image|video|audio|pdf|msword|officedocument|text|zip|rar|tar|gz|7z|json|javascript|html|css|xml|yaml/ };
+        }
 
         const files = await File.find(query).sort({ uploadedAt: -1 });
         res.status(200).json({ files });
@@ -70,19 +74,52 @@ export const listFiles = async (req, res) => {
     }
 };
 
+export const searchFiles = async (req, res) => {
+    try {
+        const { email } = req.user;
+        const { q } = req.query;
+
+        if (!q) {
+            return res.status(200).json({ files: [] });
+        }
+
+        const files = await File.find({
+            ownerEmail: email,
+            filename: { $regex: q, $options: 'i' }
+        }).sort({ uploadedAt: -1 });
+
+        res.status(200).json({ files });
+    } catch (error) {
+        console.error("Error in searchFiles:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
 export const deleteFile = async (req, res) => {
     try {
-        const { userEmail } = req;
+        const { email } = req.user;
         const { fileId } = req.params;
 
-        const file = await File.findOne({ _id: fileId, ownerEmail: userEmail });
+        const file = await File.findOne({ _id: fileId, ownerEmail: email });
         if (!file) {
             return res.status(404).json({ error: "File not found or unauthorized" });
         }
 
-        // Ideally we should also delete the videos from YouTube here
-        // We can add a cleanup job to the queue
-        
+        // Delete each YouTube video
+        for (const chunk of file.chunks) {
+            try {
+                const token = await getValidToken(chunk.youtubeAccountEmail);
+                const oauth2Client = new google.auth.OAuth2();
+                oauth2Client.setCredentials({ access_token: token });
+
+                const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
+                await youtube.videos.delete({ id: chunk.videoId });
+            } catch (err) {
+                console.error(`Failed to delete YouTube video ${chunk.videoId}:`, err.message);
+                // Continue trying to delete other chunks and the file document even if one fails
+            }
+        }
+
         await File.deleteOne({ _id: fileId });
 
         res.status(200).json({ message: "File deleted successfully" });
@@ -94,10 +131,10 @@ export const deleteFile = async (req, res) => {
 
 export const downloadFile = async (req, res) => {
     try {
-        const { userEmail } = req;
+        const { email } = req.user;
         const { fileId } = req.params;
 
-        const file = await File.findOne({ _id: fileId, ownerEmail: userEmail });
+        const file = await File.findOne({ _id: fileId, ownerEmail: email });
         if (!file) {
             return res.status(404).json({ error: "File not found or unauthorized" });
         }
@@ -108,16 +145,16 @@ export const downloadFile = async (req, res) => {
 
         const job = new Job({
             type: 'download',
-            ownerEmail: userEmail,
+            ownerEmail: email,
             fileId: file._id,
             status: 'pending'
         });
         await job.save();
 
-        await downloadQueue.add('process-download', {
+        await downloadQueue.add({
             fileId: file._id,
             jobId: job._id,
-            userEmail
+            ownerEmail: email
         });
 
         res.status(202).json({ message: "Download job queued", jobId: job._id });
@@ -129,17 +166,53 @@ export const downloadFile = async (req, res) => {
 
 export const getJobStatus = async (req, res) => {
     try {
-        const { userEmail } = req;
+        const { email } = req.user;
         const { jobId } = req.params;
 
-        const job = await Job.findOne({ _id: jobId, ownerEmail: userEmail });
+        const job = await Job.findOne({ _id: jobId, ownerEmail: email });
         if (!job) {
             return res.status(404).json({ error: "Job not found" });
         }
 
-        res.status(200).json({ job });
+        let response = { job };
+        if (job.status === 'ready' && job.type === 'download') {
+            response.downloadUrl = `/api/files/serve/${job._id}`;
+        }
+
+        res.status(200).json(response);
     } catch (error) {
         console.error("Error in getJobStatus:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+export const serveFile = async (req, res) => {
+    try {
+        const { email } = req.user;
+        const { jobId } = req.params;
+
+        const job = await Job.findOne({ _id: jobId, ownerEmail: email }).populate('fileId');
+        if (!job || job.type !== 'download' || job.status !== 'ready' || !job.outputPath) {
+            return res.status(404).json({ error: "File not ready or not found" });
+        }
+
+        if (!fs.existsSync(job.outputPath)) {
+            return res.status(404).json({ error: "Temporary file expired or removed" });
+        }
+
+        const filename = job.fileId ? job.fileId.filename : 'download';
+
+        res.download(job.outputPath, filename, (err) => {
+            if (err) {
+                console.error("Error serving file:", err);
+            }
+            // Delete after send
+            if (fs.existsSync(job.outputPath)) {
+                fs.unlinkSync(job.outputPath);
+            }
+        });
+    } catch (error) {
+        console.error("Error in serveFile:", error);
         res.status(500).json({ error: "Internal server error" });
     }
 };

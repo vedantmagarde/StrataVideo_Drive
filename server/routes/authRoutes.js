@@ -1,10 +1,10 @@
 import express from 'express';
 import { syncUser, getMe } from '../controllers/authController.js';
-import firebaseAuth from '../middlewares/firebaseAuth.js';
+import verifyFirebaseToken from '../middlewares/verifyFirebaseToken.js';
 
 const router = express.Router();
 
-router.post('/sync', firebaseAuth, syncUser);
-router.get('/me', firebaseAuth, getMe);
+router.post('/sync', verifyFirebaseToken, syncUser);
+router.get('/me', verifyFirebaseToken, getMe);
 
 export default router;

@@ -1,18 +1,21 @@
 import express from 'express';
 import multer from 'multer';
-import { uploadFile, listFiles, deleteFile, downloadFile, getJobStatus } from '../controllers/fileController.js';
-import firebaseAuth from '../middlewares/firebaseAuth.js';
+import { uploadFile, listFiles, deleteFile, downloadFile, getJobStatus, serveFile, searchFiles } from '../controllers/fileController.js';
+import verifyFirebaseToken from '../middlewares/verifyFirebaseToken.js';
 
 const router = express.Router();
 
-// Using multer to parse multipart/form-data. We will store in memory and pass to bull queue, 
-// or for very large files, store on disk temporarily. Let's use diskStorage for temporary processing.
-const upload = multer({ dest: 'tmp/' });
+const upload = multer({
+    dest: './tmp',
+    limits: { fileSize: 5 * 1024 * 1024 * 1024 } // 5GB limit
+});
 
-router.post('/upload', firebaseAuth, upload.single('file'), uploadFile);
-router.get('/', firebaseAuth, listFiles);
-router.delete('/:fileId', firebaseAuth, deleteFile);
-router.post('/download/:fileId', firebaseAuth, downloadFile);
-router.get('/status/:jobId', firebaseAuth, getJobStatus);
+router.post('/upload', verifyFirebaseToken, upload.single('file'), uploadFile);
+router.get('/', verifyFirebaseToken, listFiles);
+router.get('/search', verifyFirebaseToken, searchFiles);
+router.delete('/:fileId', verifyFirebaseToken, deleteFile);
+router.post('/download/:fileId', verifyFirebaseToken, downloadFile);
+router.get('/status/:jobId', verifyFirebaseToken, getJobStatus);
+router.get('/serve/:jobId', verifyFirebaseToken, serveFile);
 
 export default router;

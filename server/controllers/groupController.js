@@ -3,22 +3,22 @@ import User from '../models/User.js';
 
 export const createGroup = async (req, res) => {
     try {
-        const { userEmail } = req;
+        const { email } = req.user;
         const { name } = req.body;
 
         if (!name) {
             return res.status(400).json({ error: "Group name is required" });
         }
 
-        const user = await User.findOne({ email: userEmail });
+        const user = await User.findOne({ email });
         if (user.groupId) {
             return res.status(400).json({ error: "User is already in a group" });
         }
 
         const newGroup = new Group({
-            ownerEmail: userEmail,
+            ownerEmail: email,
             name,
-            memberEmails: [userEmail]
+            memberEmails: [email]
         });
 
         await newGroup.save();
@@ -34,12 +34,12 @@ export const createGroup = async (req, res) => {
     }
 };
 
-export const inviteToGroup = async (req, res) => {
+export const inviteMember = async (req, res) => {
     try {
-        const { userEmail } = req;
+        const { email } = req.user;
         const { emailToInvite } = req.body;
 
-        const user = await User.findOne({ email: userEmail }).populate('groupId');
+        const user = await User.findOne({ email }).populate('groupId');
         if (!user.groupId || user.role !== 'owner') {
             return res.status(403).json({ error: "Only group owner can invite members" });
         }
@@ -53,6 +53,18 @@ export const inviteToGroup = async (req, res) => {
         group.invitedEmails.push(emailToInvite);
         await group.save();
 
+        
+        const invitedUser = await User.findOne({ email: emailToInvite });
+        if (invitedUser && !invitedUser.groupId) {
+            invitedUser.groupId = group._id;
+            invitedUser.role = 'member';
+            await invitedUser.save();
+            
+            group.invitedEmails = group.invitedEmails.filter(e => e !== emailToInvite);
+            group.memberEmails.push(emailToInvite);
+            await group.save();
+        }
+
         res.status(200).json({ message: "User invited successfully", group });
     } catch (error) {
         console.error("Error inviting to group:", error);
@@ -62,15 +74,15 @@ export const inviteToGroup = async (req, res) => {
 
 export const removeMember = async (req, res) => {
     try {
-        const { userEmail } = req;
+        const { email } = req.user;
         const { emailToRemove } = req.body;
 
-        const user = await User.findOne({ email: userEmail }).populate('groupId');
+        const user = await User.findOne({ email }).populate('groupId');
         if (!user.groupId || user.role !== 'owner') {
             return res.status(403).json({ error: "Only group owner can remove members" });
         }
 
-        if (userEmail === emailToRemove) {
+        if (email === emailToRemove) {
             return res.status(400).json({ error: "Owner cannot remove themselves" });
         }
 
@@ -79,7 +91,7 @@ export const removeMember = async (req, res) => {
         group.invitedEmails = group.invitedEmails.filter(e => e !== emailToRemove);
         await group.save();
 
-        // Update the removed user's record
+        
         await User.findOneAndUpdate(
             { email: emailToRemove },
             { $unset: { groupId: "", role: "" } }
@@ -94,15 +106,15 @@ export const removeMember = async (req, res) => {
 
 export const getMembers = async (req, res) => {
     try {
-        const { userEmail } = req;
+        const { email } = req.user;
 
-        const user = await User.findOne({ email: userEmail });
+        const user = await User.findOne({ email });
         if (!user.groupId) {
             return res.status(404).json({ error: "User is not in a group" });
         }
 
         const members = await User.find({ groupId: user.groupId })
-            .select('-youtube.accessToken -youtube.refreshToken'); // don't expose tokens
+            .select('-youtube.accessToken -youtube.refreshToken'); 
 
         res.status(200).json({ members });
     } catch (error) {

@@ -14,7 +14,7 @@ export const AuthProvider = ({ children }) => {
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, async (user) => {
             if (user) {
-                // Sync user with backend
+                
                 try {
                     await api.post('/auth/sync');
                     const res = await api.get('/auth/me');

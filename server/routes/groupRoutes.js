@@ -1,12 +1,12 @@
 import express from 'express';
-import { createGroup, inviteToGroup, removeMember, getMembers } from '../controllers/groupController.js';
-import firebaseAuth from '../middlewares/firebaseAuth.js';
+import { createGroup, inviteMember, removeMember, getMembers } from '../controllers/groupController.js';
+import verifyFirebaseToken from '../middlewares/verifyFirebaseToken.js';
 
 const router = express.Router();
 
-router.post('/create', firebaseAuth, createGroup);
-router.post('/invite', firebaseAuth, inviteToGroup);
-router.delete('/remove', firebaseAuth, removeMember);
-router.get('/members', firebaseAuth, getMembers);
+router.post('/create', verifyFirebaseToken, createGroup);
+router.post('/invite', verifyFirebaseToken, inviteMember);
+router.delete('/remove', verifyFirebaseToken, removeMember);
+router.get('/members', verifyFirebaseToken, getMembers);
 
 export default router;

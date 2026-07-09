@@ -14,4 +14,4 @@ const redisConfig = {
 export const uploadQueue = new Bull('upload-queue', redisConfig);
 export const downloadQueue = new Bull('download-queue', redisConfig);
 
-// Keep connection open but we won't process here, workers will process
+

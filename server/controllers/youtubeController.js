@@ -3,19 +3,25 @@ import User from '../models/User.js';
 
 const getOAuth2Client = () => {
     return new google.auth.OAuth2(
-        process.env.YOUTUBE_CLIENT_ID,
-        process.env.YOUTUBE_CLIENT_SECRET,
+        process.env.GOOGLE_CLIENT_ID,
+        process.env.GOOGLE_CLIENT_SECRET,
         process.env.YOUTUBE_REDIRECT_URI
     );
 };
 
-export const getAuthUrl = async (req, res) => {
+export const authRedirect = async (req, res) => {
     try {
+        const { email } = req.user;
         const oauth2Client = getOAuth2Client();
+        
+        
+        const state = Buffer.from(email).toString('base64');
+        
         const authUrl = oauth2Client.generateAuthUrl({
             access_type: 'offline',
             prompt: 'consent',
-            scope: ['https://www.googleapis.com/auth/youtube.upload', 'https://www.googleapis.com/auth/youtube.readonly']
+            scope: ['https://www.googleapis.com/auth/youtube.upload', 'https://www.googleapis.com/auth/youtube.readonly'],
+            state
         });
         res.status(200).json({ url: authUrl });
     } catch (error) {
@@ -24,10 +30,10 @@ export const getAuthUrl = async (req, res) => {
     }
 };
 
-export const handleCallback = async (req, res) => {
+export const oauthCallback = async (req, res) => {
     try {
-        const { userEmail } = req;
-        const { code } = req.body;
+        const { email } = req.user;
+        const { code } = req.body; 
 
         if (!code) {
             return res.status(400).json({ error: "Authorization code is required" });
@@ -37,7 +43,7 @@ export const handleCallback = async (req, res) => {
         const { tokens } = await oauth2Client.getToken(code);
         oauth2Client.setCredentials(tokens);
 
-        // Fetch channel info
+        
         const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
         const channelRes = await youtube.channels.list({
             part: 'snippet',
@@ -46,16 +52,16 @@ export const handleCallback = async (req, res) => {
 
         const channel = channelRes.data.items[0];
 
-        // Save to user
-        const user = await User.findOne({ email: userEmail });
+        
+        const user = await User.findOne({ email });
         user.youtube = {
             connected: true,
             accessToken: tokens.access_token,
             refreshToken: tokens.refresh_token,
-            channelId: channel.id,
-            channelName: channel.snippet.title,
+            channelId: channel?.id,
+            channelName: channel?.snippet?.title || 'Unknown Channel',
             quotaUsed: 0,
-            quotaResetAt: new Date(new Date().setHours(24, 0, 0, 0)) // midnight tonight
+            quotaResetAt: new Date(new Date().setHours(24, 0, 0, 0)) 
         };
         await user.save();
 
@@ -68,9 +74,9 @@ export const handleCallback = async (req, res) => {
 
 export const disconnect = async (req, res) => {
     try {
-        const { userEmail } = req;
+        const { email } = req.user;
         
-        const user = await User.findOne({ email: userEmail });
+        const user = await User.findOne({ email });
         user.youtube = {
             connected: false,
             accessToken: null,
@@ -87,4 +93,50 @@ export const disconnect = async (req, res) => {
         console.error("Error disconnecting youtube:", error);
         res.status(500).json({ error: "Internal server error" });
     }
+};
+
+
+export const getValidToken = async (email) => {
+    const user = await User.findOne({ email });
+    if (!user || !user.youtube.connected) {
+        throw new Error(`YouTube not connected for user ${email}`);
+    }
+
+    const oauth2Client = getOAuth2Client();
+    oauth2Client.setCredentials({
+        access_token: user.youtube.accessToken,
+        refresh_token: user.youtube.refreshToken,
+    });
+
+    
+    
+    const { token } = await oauth2Client.getAccessToken();
+    
+    if (token !== user.youtube.accessToken) {
+        user.youtube.accessToken = token;
+        await user.save();
+    }
+
+    return token;
+};
+
+
+export const getAvailableAccount = async (groupId) => {
+    const members = await User.find({ groupId, 'youtube.connected': true });
+    
+    if (!members.length) {
+        throw new Error("No connected YouTube accounts found in this group.");
+    }
+
+    
+    const available = members.filter(m => m.youtube.quotaUsed < 8000);
+    
+    if (!available.length) {
+        throw new Error("All connected YouTube accounts have exhausted their quota.");
+    }
+
+    
+    available.sort((a, b) => a.youtube.quotaUsed - b.youtube.quotaUsed);
+
+    return available[0];
 };

@@ -1,0 +1,167 @@
+import { spawn } from 'child_process';
+import path from 'path';
+import { v4 as uuidv4 } from 'uuid';
+import { encrypt } from './encryption.js';
+
+
+
+let RS;
+try {
+    RS = await import('@ronomon/reed-solomon');
+} catch (e) {
+    console.warn("Reed-Solomon not loaded (likely on Windows dev). It will mock RS in dev.");
+}
+
+const BLOCK_SIZE = 16;
+const WIDTH = 1280;
+const HEIGHT = 720;
+const BLOCKS_X = Math.floor(WIDTH / BLOCK_SIZE);
+const BLOCKS_Y = Math.floor(HEIGHT / BLOCK_SIZE);
+const BITS_PER_FRAME = BLOCKS_X * BLOCKS_Y; 
+
+export const applyReedSolomon = (buffer) => {
+    if (!RS || !RS.default) {
+        console.warn("Skipping RS encode (mocking)");
+        return buffer;
+    }
+    
+    
+    const dataShards = 10;
+    const parityShards = 2;
+    const totalShards = dataShards + parityShards;
+
+    const remainder = buffer.length % dataShards;
+    let paddedBuffer = buffer;
+    if (remainder !== 0) {
+        const padding = Buffer.alloc(dataShards - remainder);
+        paddedBuffer = Buffer.concat([buffer, padding]);
+    }
+
+    const shardLength = paddedBuffer.length / dataShards;
+    const outBuffer = Buffer.alloc(totalShards * shardLength);
+    paddedBuffer.copy(outBuffer);
+
+    return new Promise((resolve, reject) => {
+        RS.default.encode(
+            outBuffer,
+            0,
+            outBuffer.length,
+            shardLength,
+            dataShards,
+            parityShards,
+            (error) => {
+                if (error) return reject(error);
+                resolve(outBuffer);
+            }
+        );
+    });
+};
+
+export const bufferToBits = (buffer) => {
+    const bits = new Uint8Array(buffer.length * 8);
+    for (let i = 0; i < buffer.length; i++) {
+        const byte = buffer[i];
+        for (let j = 0; j < 8; j++) {
+            bits[i * 8 + j] = (byte >> (7 - j)) & 1;
+        }
+    }
+    return bits;
+};
+
+export const renderFramesToVideo = (bits, outputPath) => {
+    return new Promise((resolve, reject) => {
+        
+        const ffmpeg = spawn('ffmpeg', [
+            '-y',
+            '-f', 'rawvideo',
+            '-vcodec', 'rawvideo',
+            '-s', `${WIDTH}x${HEIGHT}`,
+            '-pix_fmt', 'rgba',
+            '-r', '30', 
+            '-i', '-', 
+            '-c:v', 'libx264',
+            '-crf', '0', 
+            '-preset', 'ultrafast',
+            '-pix_fmt', 'yuv420p',
+            outputPath
+        ]);
+
+        ffmpeg.stderr.on('data', (data) => {
+            
+            
+        });
+
+        ffmpeg.on('close', (code) => {
+            if (code === 0) resolve(outputPath);
+            else reject(new Error(`FFmpeg exited with code ${code}`));
+        });
+
+        
+        const numFrames = Math.ceil(bits.length / BITS_PER_FRAME);
+        const rgbaSize = WIDTH * HEIGHT * 4; 
+
+        const writeFrames = () => {
+            let i = 0;
+            let bitOffset = 0;
+
+            const writeNext = () => {
+                let ok = true;
+                while (i < numFrames && ok) {
+                    const frameBuffer = Buffer.alloc(rgbaSize);
+                    
+                    for (let y = 0; y < BLOCKS_Y; y++) {
+                        for (let x = 0; x < BLOCKS_X; x++) {
+                            const bit = (bitOffset < bits.length) ? bits[bitOffset] : 0;
+                            bitOffset++;
+
+                            const color = bit === 1 ? 255 : 0;
+
+                            
+                            for (let by = 0; by < BLOCK_SIZE; by++) {
+                                for (let bx = 0; bx < BLOCK_SIZE; bx++) {
+                                    const py = y * BLOCK_SIZE + by;
+                                    const px = x * BLOCK_SIZE + bx;
+                                    const pIdx = (py * WIDTH + px) * 4;
+                                    
+                                    frameBuffer[pIdx] = color;     
+                                    frameBuffer[pIdx + 1] = color; 
+                                    frameBuffer[pIdx + 2] = color; 
+                                    frameBuffer[pIdx + 3] = 255;   
+                                }
+                            }
+                        }
+                    }
+                    i++;
+                    ok = ffmpeg.stdin.write(frameBuffer);
+                }
+                
+                if (i < numFrames) {
+                    ffmpeg.stdin.once('drain', writeNext);
+                } else {
+                    ffmpeg.stdin.end();
+                }
+            };
+            writeNext();
+        };
+
+        writeFrames();
+    });
+};
+
+export const encode = async (chunkBuffer, email, tempDir) => {
+    
+    const encryptedBuffer = encrypt(chunkBuffer, email);
+    
+    
+    const rsBuffer = await applyReedSolomon(encryptedBuffer);
+
+    
+    const bits = bufferToBits(rsBuffer);
+
+    
+    const outputPath = path.join(tempDir, `${uuidv4()}.mp4`);
+    await renderFramesToVideo(bits, outputPath);
+
+    
+    return outputPath;
+};

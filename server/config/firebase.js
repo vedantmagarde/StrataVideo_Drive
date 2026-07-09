@@ -1,7 +1,7 @@
 import admin from "firebase-admin";
 
-// You need to have the FIREBASE_SERVICE_ACCOUNT base64 string or JSON in your .env
-// We parse it here to initialize the admin SDK
+
+
 if (!admin.apps.length) {
     try {
         const serviceAccount = JSON.parse(

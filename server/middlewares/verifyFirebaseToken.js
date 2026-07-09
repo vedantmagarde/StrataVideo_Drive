@@ -1,6 +1,6 @@
 import admin from "../config/firebase.js";
 
-const firebaseAuth = async (req, res, next) => {
+const verifyFirebaseToken = async (req, res, next) => {
     try {
         const authHeader = req.headers.authorization;
         if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -9,17 +9,19 @@ const firebaseAuth = async (req, res, next) => {
 
         const idToken = authHeader.split("Bearer ")[1];
         
-        // Verify token using Firebase Admin SDK
+        
         const decodedToken = await admin.auth().verifyIdToken(idToken);
         
         if (!decodedToken.email) {
             return res.status(401).json({ error: "Unauthorized. Token does not contain an email address." });
         }
 
-        // Attach verified email to the request object
-        req.userEmail = decodedToken.email;
-        req.userPhoto = decodedToken.picture;
-        req.userName = decodedToken.name;
+        
+        req.user = {
+            email: decodedToken.email,
+            name: decodedToken.name,
+            picture: decodedToken.picture
+        };
 
         next();
     } catch (error) {
@@ -28,4 +30,4 @@ const firebaseAuth = async (req, res, next) => {
     }
 };
 
-export default firebaseAuth;
+export default verifyFirebaseToken;
