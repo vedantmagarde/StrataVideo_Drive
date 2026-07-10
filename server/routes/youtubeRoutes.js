@@ -5,7 +5,7 @@ import verifyFirebaseToken from '../middlewares/verifyFirebaseToken.js';
 const router = express.Router();
 
 router.get('/auth', verifyFirebaseToken, authRedirect);
-router.post('/callback', verifyFirebaseToken, oauthCallback);
+router.get('/callback', oauthCallback);
 router.post('/disconnect', verifyFirebaseToken, disconnect);
 
 export default router;

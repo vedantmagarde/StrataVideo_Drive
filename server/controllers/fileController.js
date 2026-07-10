@@ -5,6 +5,7 @@ import { uploadQueue, downloadQueue } from '../jobs/queues.js';
 import fs from 'fs';
 import { google } from 'googleapis';
 import { getValidToken } from '../controllers/youtubeController.js';
+import { activeJobs } from '../utils/activeJobs.js';
 
 export const uploadFile = async (req, res) => {
     try {
@@ -174,7 +175,7 @@ export const getJobStatus = async (req, res) => {
         const { email } = req.user;
         const { jobId } = req.params;
 
-        const job = await Job.findOne({ _id: jobId, ownerEmail: email });
+        const job = await Job.findOne({ _id: jobId, ownerEmail: email }).populate('fileId');
         if (!job) {
             return res.status(404).json({ error: "Job not found" });
         }
@@ -182,6 +183,7 @@ export const getJobStatus = async (req, res) => {
         let response = { job };
         if (job.status === 'ready' && job.type === 'download') {
             response.downloadUrl = `/api/files/serve/${job._id}`;
+            response.filename = job.fileId ? job.fileId.filename : 'downloaded_file';
         }
 
         res.status(200).json(response);
@@ -211,13 +213,45 @@ export const serveFile = async (req, res) => {
             if (err) {
                 console.error("Error serving file:", err);
             }
-            // Delete after send
+            // Aggressively delete file immediately after transfer finishes (or fails)
+            // to prevent free-tier cloud servers from running out of disk space.
             if (fs.existsSync(job.outputPath)) {
                 fs.unlinkSync(job.outputPath);
             }
         });
     } catch (error) {
         console.error("Error in serveFile:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+export const cancelJob = async (req, res) => {
+    try {
+        const { email } = req.user;
+        const { jobId } = req.params;
+
+        const job = await Job.findOneAndUpdate(
+            { _id: jobId, ownerEmail: email, status: { $in: ['pending', 'processing'] } },
+            { status: 'failed', error: 'Cancelled by user' },
+            { new: true }
+        );
+
+        if (!job) {
+            return res.status(404).json({ error: "Job not found or cannot be cancelled" });
+        }
+
+        if (activeJobs.has(jobId)) {
+            console.log(`[CancelJob] Killing active process for job ${jobId}`);
+            const processRef = activeJobs.get(jobId);
+            if (processRef && typeof processRef.kill === 'function') {
+                processRef.kill('SIGKILL');
+            }
+            activeJobs.delete(jobId);
+        }
+
+        res.status(200).json({ message: "Job cancelled successfully" });
+    } catch (error) {
+        console.error("Error cancelling job:", error);
         res.status(500).json({ error: "Internal server error" });
     }
 };

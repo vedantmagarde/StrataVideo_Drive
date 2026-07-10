@@ -4,6 +4,9 @@ import fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
 import { getValidToken } from '../controllers/youtubeController.js';
 import { decrypt } from './encryption.js';
+import ffmpegPath from 'ffmpeg-static';
+import youtubedl from 'youtube-dl-exec';
+import { activeJobs } from './activeJobs.js';
 
 let RS;
 try {
@@ -19,31 +22,54 @@ const BLOCKS_X = Math.floor(WIDTH / BLOCK_SIZE);
 const BLOCKS_Y = Math.floor(HEIGHT / BLOCK_SIZE);
 const BITS_PER_FRAME = BLOCKS_X * BLOCKS_Y;
 
-export const downloadVideo = async (videoId, youtubeEmail, tempDir) => {
-    const token = await getValidToken(youtubeEmail);
+export const downloadVideo = async (videoId, youtubeEmail, tempDir, jobId) => {
     const outputPath = path.join(tempDir, `${videoId}_dl.mp4`);
 
     return new Promise((resolve, reject) => {
-        // Pass the token as a Bearer header to yt-dlp to download the unlisted video using the owner's account
-        const cmd = `yt-dlp --add-header "Authorization: Bearer ${token}" -f bestvideo[ext=mp4] "https://www.youtube.com/watch?v=${videoId}" -o "${outputPath}"`;
-        exec(cmd, (error, stdout, stderr) => {
-            if (error) {
-                console.error("yt-dlp error:", stderr);
-                return reject(error);
+        const ytdlProcess = youtubedl.exec(`https://www.youtube.com/watch?v=${videoId}`, {
+            f: 'bestvideo[ext=mp4]',
+            o: outputPath
+        });
+
+        ytdlProcess.catch(() => {
+            // execa/tinyspawn returns a Promise that rejects on non-zero exit.
+            // We ignore it here because we handle the 'close' event manually below.
+        });
+
+        if (jobId) {
+            activeJobs.set(jobId, ytdlProcess);
+        }
+
+        ytdlProcess.on('close', (code) => {
+            if (jobId) activeJobs.delete(jobId);
+            if (code !== 0) {
+                console.error("yt-dlp error, exit code:", code);
+                reject(new Error("yt-dlp failed"));
+            } else {
+                resolve(outputPath);
             }
-            resolve(outputPath);
+        });
+
+        ytdlProcess.on('error', (err) => {
+            if (jobId) activeJobs.delete(jobId);
+            console.error("yt-dlp execution error:", err);
+            reject(err);
         });
     });
 };
 
-export const decodeFramesFromStream = (videoPath) => {
+export const decodeFramesFromStream = (videoPath, jobId, onProgress) => {
     return new Promise((resolve, reject) => {
-        const ffmpeg = spawn('ffmpeg', [
+        const ffmpeg = spawn(ffmpegPath, [
             '-i', videoPath,
             '-f', 'rawvideo',
             '-pix_fmt', 'rgba',
             '-' // output to stdout
         ]);
+
+        if (jobId) {
+            activeJobs.set(jobId, ffmpeg);
+        }
 
         const allBits = [];
         let leftover = Buffer.alloc(0);
@@ -73,11 +99,46 @@ export const decodeFramesFromStream = (videoPath) => {
             leftover = buffer;
         });
 
+        let totalDurationSec = 0;
+        let lastReportedPercent = -1;
+        let lastTerminalPercent = -1;
+
         ffmpeg.stderr.on('data', (data) => {
-            console.error(`[Decoder FFmpeg Log]: ${data.toString()}`);
+            const str = data.toString();
+
+            const durationMatch = str.match(/Duration: (\d{2}):(\d{2}):(\d{2}\.\d{2})/);
+            if (durationMatch) {
+                const hours = parseInt(durationMatch[1], 10);
+                const mins = parseInt(durationMatch[2], 10);
+                const secs = parseFloat(durationMatch[3]);
+                totalDurationSec = hours * 3600 + mins * 60 + secs;
+            }
+
+            const timeMatch = str.match(/time=(\d{2}):(\d{2}):(\d{2}\.\d{2})/);
+            if (timeMatch && totalDurationSec > 0 && typeof onProgress === 'function') {
+                const hours = parseInt(timeMatch[1], 10);
+                const mins = parseInt(timeMatch[2], 10);
+                const secs = parseFloat(timeMatch[3]);
+                const currentTimeSec = hours * 3600 + mins * 60 + secs;
+
+                let percent = Math.floor((currentTimeSec / totalDurationSec) * 100);
+                if (percent > 100) percent = 100;
+
+                if (percent !== lastTerminalPercent && percent % 10 === 0) {
+                    console.log(`[Decoder] Video decoding is ${percent}% complete...`);
+                    lastTerminalPercent = percent;
+                }
+
+                if (percent !== lastReportedPercent && percent % 2 === 0) {
+                    lastReportedPercent = percent;
+                    onProgress(percent).catch(err => console.error("Progress update error:", err));
+                }
+            }
         });
 
         ffmpeg.on('close', (code) => {
+            if (jobId) activeJobs.delete(jobId);
+
             if (code !== 0) {
                 console.error(`[Decoder Error]: FFmpeg exited with code ${code}`);
                 reject(new Error(`FFmpeg exit code ${code}`));
@@ -137,28 +198,51 @@ export const removeReedSolomon = (buffer) => {
     });
 };
 
-export const decode = async (videoId, youtubeEmail, ownerEmail, tempDir) => {
+export const decode = async (videoId, youtubeEmail, ownerEmail, tempDir, jobId, onProgress) => {
     try {
         console.log(`[Decoder] Starting decode for video ${videoId}...`);
-        
+
         // 1. download video
         console.log(`[Decoder] Downloading video from YouTube...`);
-        const videoPath = await downloadVideo(videoId, youtubeEmail, tempDir);
+        const videoPath = await downloadVideo(videoId, youtubeEmail, tempDir, jobId);
         console.log(`[Decoder] Download complete: ${videoPath}`);
 
         // 2. & 3. extract frames & convert frames to buffer via streaming
         console.log(`[Decoder] Extracting frames...`);
-        const bits = await decodeFramesFromStream(videoPath);
+        const bits = await decodeFramesFromStream(videoPath, jobId, onProgress);
         const rsBuffer = bitsToBuffer(bits);
         console.log(`[Decoder] Frame extraction complete.`);
 
         // 4. remove Reed-Solomon
         console.log(`[Decoder] Removing Reed-Solomon...`);
-        const encryptedBuffer = await removeReedSolomon(rsBuffer);
+        let encryptedBuffer = await removeReedSolomon(rsBuffer);
 
         // 5. decrypt using ownerEmail
         console.log(`[Decoder] Decrypting buffer...`);
-        const decryptedBuffer = decrypt(encryptedBuffer, ownerEmail);
+
+        let lastNonZero = encryptedBuffer.length - 1;
+        while (lastNonZero >= 0 && encryptedBuffer[lastNonZero] === 0) {
+            lastNonZero--;
+        }
+        let estimatedLength = lastNonZero + 1;
+        if (estimatedLength % 16 !== 0) {
+            estimatedLength += 16 - (estimatedLength % 16);
+        }
+
+        let decryptedBuffer = null;
+        let lastError = null;
+        for (let l = estimatedLength; l <= encryptedBuffer.length; l += 16) {
+            try {
+                decryptedBuffer = decrypt(encryptedBuffer.subarray(0, l), ownerEmail);
+                break;
+            } catch (e) {
+                lastError = e;
+            }
+        }
+
+        if (!decryptedBuffer) {
+            throw lastError || new Error("Failed to decrypt buffer: no valid padding found.");
+        }
 
         // 6. delete temp video
         if (fs.existsSync(videoPath)) {

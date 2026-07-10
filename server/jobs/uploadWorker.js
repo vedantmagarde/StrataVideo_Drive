@@ -83,6 +83,11 @@ uploadQueue.process(async (bullJob) => {
             const chunk = chunks[i];
 
             try {
+                const currentJobStatus = await Job.findById(jobId);
+                if (currentJobStatus && currentJobStatus.status === 'failed') {
+                    throw new Error("Job was cancelled by user");
+                }
+
                 console.log(`[UploadWorker] Processing chunk ${i + 1}/${totalChunks} for fileId ${fileId}...`);
                 // a. get available account
                 const ytAccount = await getAvailableAccount(groupId || ownerEmail); // fallback to owner if no group
@@ -90,7 +95,16 @@ uploadQueue.process(async (bullJob) => {
 
                 // b. encode chunk
                 const tempDir = './tmp';
-                const videoPath = await encode(chunk.data, ownerEmail, tempDir);
+                
+                const onProgress = async (percent) => {
+                    const chunkStartProg = 10 + Math.floor((i / totalChunks) * 80);
+                    const chunkEndProg = 10 + Math.floor(((i + 1) / totalChunks) * 80);
+                    const currentProg = chunkStartProg + Math.floor((percent / 100) * (chunkEndProg - chunkStartProg));
+                    bullJob.progress(currentProg);
+                    await Job.findByIdAndUpdate(jobId, { progress: currentProg });
+                };
+
+                const videoPath = await encode(chunk.data, ownerEmail, tempDir, jobId, onProgress);
 
                 // c & d. Random delay 2-5 min between uploads (skip for first chunk)
                 if (i > 0) {

@@ -2,6 +2,8 @@ import { spawn } from 'child_process';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { encrypt } from './encryption.js';
+import ffmpegPath from 'ffmpeg-static';
+import { activeJobs } from './activeJobs.js';
 
 
 
@@ -68,10 +70,10 @@ export const bufferToBits = (buffer) => {
     return bits;
 };
 
-export const renderFramesToVideo = (bits, outputPath) => {
+export const renderFramesToVideo = (bits, outputPath, jobId, onProgress) => {
     return new Promise((resolve, reject) => {
         
-        const ffmpeg = spawn('ffmpeg', [
+        const ffmpeg = spawn(ffmpegPath, [
             '-y',
             '-f', 'rawvideo',
             '-vcodec', 'rawvideo',
@@ -86,11 +88,17 @@ export const renderFramesToVideo = (bits, outputPath) => {
             outputPath
         ]);
 
+        if (jobId) {
+            activeJobs.set(jobId, ffmpeg);
+        }
+
         ffmpeg.stderr.on('data', (data) => {
             console.error(`[Encoder FFmpeg Log]: ${data.toString()}`);
         });
 
         ffmpeg.on('close', (code) => {
+            if (jobId) activeJobs.delete(jobId);
+            
             if (code === 0) {
                 console.log(`[Encoder] FFmpeg completed successfully for ${outputPath}`);
                 resolve(outputPath);
@@ -107,6 +115,8 @@ export const renderFramesToVideo = (bits, outputPath) => {
         const writeFrames = () => {
             let i = 0;
             let bitOffset = 0;
+            let lastReportedPercent = -1;
+            let lastTerminalPercent = -1;
 
             const writeNext = () => {
                 let ok = true;
@@ -119,7 +129,6 @@ export const renderFramesToVideo = (bits, outputPath) => {
                             bitOffset++;
 
                             const color = bit === 1 ? 255 : 0;
-
                             
                             for (let by = 0; by < BLOCK_SIZE; by++) {
                                 for (let bx = 0; bx < BLOCK_SIZE; bx++) {
@@ -136,6 +145,21 @@ export const renderFramesToVideo = (bits, outputPath) => {
                         }
                     }
                     i++;
+                    
+                    if (typeof onProgress === 'function') {
+                        let percent = Math.floor((i / numFrames) * 100);
+                        
+                        if (percent !== lastTerminalPercent && percent % 10 === 0) {
+                            console.log(`[Encoder] Video rendering is ${percent}% complete...`);
+                            lastTerminalPercent = percent;
+                        }
+
+                        if (percent !== lastReportedPercent && percent % 2 === 0) {
+                            lastReportedPercent = percent;
+                            onProgress(percent).catch(err => console.error("Progress update error:", err));
+                        }
+                    }
+
                     ok = ffmpeg.stdin.write(frameBuffer);
                 }
                 
@@ -152,7 +176,7 @@ export const renderFramesToVideo = (bits, outputPath) => {
     });
 };
 
-export const encode = async (chunkBuffer, email, tempDir) => {
+export const encode = async (chunkBuffer, email, tempDir, jobId, onProgress) => {
     try {
         console.log(`[Encoder] Starting encode for user ${email}. Chunk size: ${chunkBuffer.length} bytes`);
         const encryptedBuffer = encrypt(chunkBuffer, email);
@@ -166,7 +190,7 @@ export const encode = async (chunkBuffer, email, tempDir) => {
         const outputPath = path.join(tempDir, `${uuidv4()}.mp4`);
         console.log(`[Encoder] Rendering frames to video at ${outputPath}...`);
         
-        await renderFramesToVideo(bits, outputPath);
+        await renderFramesToVideo(bits, outputPath, jobId, onProgress);
         console.log(`[Encoder] Video rendering complete: ${outputPath}`);
 
         return outputPath;

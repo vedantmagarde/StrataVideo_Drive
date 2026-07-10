@@ -30,11 +30,25 @@ downloadQueue.process(async (bullJob) => {
             const chunk = file.chunks[i];
 
             try {
+                const currentJobStatus = await Job.findById(jobId);
+                if (currentJobStatus && currentJobStatus.status === 'failed') {
+                    throw new Error("Job was cancelled by user");
+                }
+
                 console.log(`[DownloadWorker] Processing chunk ${i + 1}/${totalChunks} for fileId ${fileId}...`);
                 // a. decode chunk
                 const tempDir = './tmp';
                 console.log(`[DownloadWorker] Decoding videoId ${chunk.videoId} using account ${chunk.youtubeAccountEmail}...`);
-                const chunkBuf = await decode(chunk.videoId, chunk.youtubeAccountEmail, ownerEmail, tempDir);
+                
+                const onProgress = async (percent) => {
+                    const chunkStartProg = 5 + Math.floor((i / totalChunks) * 85);
+                    const chunkEndProg = 5 + Math.floor(((i + 1) / totalChunks) * 85);
+                    const currentProg = chunkStartProg + Math.floor((percent / 100) * (chunkEndProg - chunkStartProg));
+                    bullJob.progress(currentProg);
+                    await Job.findByIdAndUpdate(jobId, { progress: currentProg });
+                };
+
+                const chunkBuf = await decode(chunk.videoId, chunk.youtubeAccountEmail, ownerEmail, tempDir, jobId, onProgress);
                 console.log(`[DownloadWorker] Successfully decoded chunk ${i + 1}/${totalChunks}`);
 
                 // b. collect chunk buffer
@@ -52,11 +66,13 @@ downloadQueue.process(async (bullJob) => {
 
         // 4. reassembleChunks
         const finalBuffer = reassembleChunks(chunkBuffers);
+        console.log(`[DownloadWorker] All chunks successfully decoded and reassembled. Total size: ${finalBuffer.length} bytes`);
 
         // 5. write final file to /tmp/uuid_filename
         const safeFilename = file.filename.replace(/[^a-zA-Z0-9.\-_]/g, '_');
         outputPath = path.join('./tmp', `${uuidv4()}_${safeFilename}`);
         fs.writeFileSync(outputPath, finalBuffer);
+        console.log(`[DownloadWorker] Final file successfully written to temporary path: ${path.resolve(outputPath)}`);
 
         // 6. Set Job status -> ready with outputPath
         await Job.findByIdAndUpdate(jobId, { status: 'ready', progress: 100, outputPath });

@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import api from '../api/axios';
-import { CheckCircle2, XCircle, Loader2 } from 'lucide-react';
+import { CheckCircle2, XCircle, Loader2, Download, X } from 'lucide-react';
 
 const JobStatusPoller = ({ jobId, onComplete, onFailed }) => {
     const [job, setJob] = useState(null);
+    const [downloadData, setDownloadData] = useState(null);
+    const [isDownloading, setIsDownloading] = useState(false);
 
     useEffect(() => {
         let interval;
@@ -15,24 +17,14 @@ const JobStatusPoller = ({ jobId, onComplete, onFailed }) => {
 
                 if (currentJob.status === 'ready') {
                     if (currentJob.type === 'download' && res.data.downloadUrl) {
-                        
-                        
-                        const url = `${import.meta.env.VITE_API_URL.replace('/api', '')}${res.data.downloadUrl}`;
-                        
-                        
-                        
-                        api.get(res.data.downloadUrl, { responseType: 'blob' })
-                            .then(response => {
-                                const urlBlob = window.URL.createObjectURL(new Blob([response.data]));
-                                const link = document.createElement('a');
-                                link.href = urlBlob;
-                                link.setAttribute('download', 'downloaded_file'); 
-                                document.body.appendChild(link);
-                                link.click();
-                                document.body.removeChild(link);
-                            });
+                        // Store the url and filename to let the user trigger it manually
+                        setDownloadData({
+                            url: res.data.downloadUrl,
+                            filename: res.data.filename || 'downloaded_file'
+                        });
+                    } else {
+                        if (onComplete) setTimeout(onComplete, 2000);
                     }
-                    if (onComplete) setTimeout(onComplete, 2000);
                     clearInterval(interval);
                 } else if (currentJob.status === 'failed') {
                     if (onFailed) setTimeout(onFailed, 4000);
@@ -48,6 +40,40 @@ const JobStatusPoller = ({ jobId, onComplete, onFailed }) => {
         
         return () => clearInterval(interval);
     }, [jobId, onComplete, onFailed]);
+
+    const handleSaveFile = async () => {
+        if (!downloadData) return;
+        setIsDownloading(true);
+        try {
+            const url = downloadData.url.startsWith('/api') 
+                ? downloadData.url.replace('/api', '') 
+                : downloadData.url;
+            const response = await api.get(url, { responseType: 'blob' });
+            const urlBlob = window.URL.createObjectURL(new Blob([response.data]));
+            const link = document.createElement('a');
+            link.href = urlBlob;
+            link.setAttribute('download', downloadData.filename); 
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            if (onComplete) setTimeout(onComplete, 1000);
+        } catch (error) {
+            console.error("Error saving file:", error);
+        } finally {
+            setIsDownloading(false);
+        }
+    };
+
+    const handleCancel = async () => {
+        try {
+            await api.put(`/files/cancel/${jobId}`);
+            setJob(prev => ({...prev, status: 'failed', error: 'Cancelled by user'}));
+            if (onFailed) setTimeout(onFailed, 2000);
+        } catch (error) {
+            console.error("Error cancelling job:", error);
+        }
+    };
 
     if (!job) return null;
 
@@ -70,9 +96,29 @@ const JobStatusPoller = ({ jobId, onComplete, onFailed }) => {
                         {job.status === 'failed' ? job.error : `${job.progress}% complete`}
                     </p>
                 </div>
+                
+                {(job.status === 'pending' || job.status === 'processing') && (
+                    <button 
+                        onClick={handleCancel}
+                        className="ml-auto text-slate-400 hover:text-red-500 p-1 rounded transition-colors"
+                        title="Cancel Job"
+                    >
+                        <X className="w-5 h-5" />
+                    </button>
+                )}
+                
+                {downloadData && (
+                    <button 
+                        onClick={handleSaveFile}
+                        disabled={isDownloading}
+                        className="ml-auto bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded text-sm font-medium flex items-center gap-1.5 transition-colors disabled:opacity-50"
+                    >
+                        {isDownloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                        Save File
+                    </button>
+                )}
             </div>
             
-            {}
             {(job.status === 'pending' || job.status === 'processing') && (
                 <div 
                     className="absolute bottom-0 left-0 h-1 bg-blue-500 transition-all duration-500" 
