@@ -14,9 +14,15 @@ export const AuthProvider = ({ children }) => {
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, async (user) => {
             if (user) {
-                
                 try {
-                    await api.post('/auth/sync');
+                    const inviteCode = localStorage.getItem('inviteCode');
+                    const payload = inviteCode ? { inviteCode } : {};
+                    await api.post('/auth/sync', payload);
+                    
+                    if (inviteCode) {
+                        localStorage.removeItem('inviteCode');
+                    }
+                    
                     const res = await api.get('/auth/me');
                     setCurrentUser({ ...user, backendProfile: res.data.user });
                 } catch (error) {
@@ -32,8 +38,15 @@ export const AuthProvider = ({ children }) => {
         return unsubscribe;
     }, []);
 
-    const signIn = () => {
+    const signIn = (options = {}) => {
         const provider = new GoogleAuthProvider();
+        const customParams = {};
+        if (options.emailHint) customParams.login_hint = options.emailHint;
+        if (options.prompt) customParams.prompt = options.prompt;
+        
+        if (Object.keys(customParams).length > 0) {
+            provider.setCustomParameters(customParams);
+        }
         return signInWithPopup(auth, provider);
     };
 

@@ -29,17 +29,25 @@ downloadQueue.process(async (bullJob) => {
         for (let i = 0; i < totalChunks; i++) {
             const chunk = file.chunks[i];
 
-            // a. decode chunk
-            const tempDir = './tmp';
-            const chunkBuf = await decode(chunk.videoId, chunk.youtubeAccountEmail, ownerEmail, tempDir);
+            try {
+                console.log(`[DownloadWorker] Processing chunk ${i + 1}/${totalChunks} for fileId ${fileId}...`);
+                // a. decode chunk
+                const tempDir = './tmp';
+                console.log(`[DownloadWorker] Decoding videoId ${chunk.videoId} using account ${chunk.youtubeAccountEmail}...`);
+                const chunkBuf = await decode(chunk.videoId, chunk.youtubeAccountEmail, ownerEmail, tempDir);
+                console.log(`[DownloadWorker] Successfully decoded chunk ${i + 1}/${totalChunks}`);
 
-            // b. collect chunk buffer
-            chunkBuffers.push({ chunkIndex: chunk.chunkIndex, data: chunkBuf });
+                // b. collect chunk buffer
+                chunkBuffers.push({ chunkIndex: chunk.chunkIndex, data: chunkBuf });
 
-            // c. update progress
-            const prog = 5 + Math.floor(((i + 1) / totalChunks) * 85);
-            bullJob.progress(prog);
-            await Job.findByIdAndUpdate(jobId, { progress: prog });
+                // c. update progress
+                const prog = 5 + Math.floor(((i + 1) / totalChunks) * 85);
+                bullJob.progress(prog);
+                await Job.findByIdAndUpdate(jobId, { progress: prog });
+            } catch (chunkError) {
+                console.error(`[DownloadWorker] ERROR processing chunk ${i + 1}/${totalChunks}:`, chunkError);
+                throw chunkError;
+            }
         }
 
         // 4. reassembleChunks

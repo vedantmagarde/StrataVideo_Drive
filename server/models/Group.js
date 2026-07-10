@@ -9,6 +9,9 @@ const groupSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  inviteCode: {
+    type: String
+  },
   invitedEmails: [{
     type: String
   }],

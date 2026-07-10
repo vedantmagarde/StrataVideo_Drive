@@ -21,9 +21,12 @@ export const uploadFile = async (req, res) => {
             ownerEmail: email,
             groupId: user.groupId || null,
             filename: file.originalname,
+            mimeType: file.mimetype,
+            sizeBytes: file.size,
             status: 'pending'
         });
         await newFile.save();
+        console.log(`[FileController] File document created in DB: ${newFile._id}`);
 
         const job = new Job({
             type: 'upload',
@@ -32,6 +35,7 @@ export const uploadFile = async (req, res) => {
             status: 'pending'
         });
         await job.save();
+        console.log(`[FileController] Job document created in DB: ${job._id}`);
 
         await uploadQueue.add({
             fileId: newFile._id,
@@ -40,10 +44,11 @@ export const uploadFile = async (req, res) => {
             tempFilePath: file.path,
             groupId: user.groupId
         });
+        console.log(`[FileController] Successfully pushed job ${job._id} to Bull uploadQueue`);
 
         res.status(202).json({ message: "Upload job queued", jobId: job._id, fileId: newFile._id });
     } catch (error) {
-        console.error("Error in uploadFile:", error);
+        console.error("[FileController Fatal Error] Error in uploadFile:", error);
         res.status(500).json({ error: "Internal server error" });
     }
 };

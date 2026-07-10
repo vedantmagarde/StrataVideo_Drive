@@ -4,24 +4,41 @@ import Group from '../models/Group.js';
 export const syncUser = async (req, res) => {
     try {
         const { email, name, picture } = req.user;
+        const { inviteCode } = req.body;
 
         let user = await User.findOne({ email });
 
         if (!user) {
+            let group = null;
             
-            const group = await Group.findOne({ invitedEmails: email });
+            if (inviteCode) {
+                group = await Group.findOne({ inviteCode });
+                if (group && group.memberEmails.length >= 10) {
+                    return res.status(400).json({ error: "Maximum limit of 10 connected emails reached." });
+                }
+            } else {
+                group = await Group.findOne({ invitedEmails: email });
+            }
+
+            if (!group) {
+                group = new Group({
+                    ownerEmail: email,
+                    name: `${name || email.split('@')[0]}'s Vault`,
+                    memberEmails: [email]
+                });
+                await group.save();
+            }
 
             user = new User({
                 email,
                 displayName: name || "",
                 photoURL: picture || "",
-                groupId: group ? group._id : null,
-                role: group ? 'member' : 'owner'
+                groupId: group._id,
+                role: group.ownerEmail === email ? 'owner' : 'member'
             });
             await user.save();
 
-            // If they were invited, add them to memberEmails and remove from invitedEmails
-            if (group) {
+            if (group.ownerEmail !== email) {
                 group.invitedEmails = group.invitedEmails.filter(e => e !== email);
                 if (!group.memberEmails.includes(email)) {
                     group.memberEmails.push(email);
@@ -29,13 +46,26 @@ export const syncUser = async (req, res) => {
                 await group.save();
             }
         } else {
-            // Update photo and name
             if (name) user.displayName = name;
             if (picture) user.photoURL = picture;
+            
+            if (inviteCode && !user.groupId) {
+                const group = await Group.findOne({ inviteCode });
+                if (group) {
+                    if (group.memberEmails.length >= 10) {
+                        return res.status(400).json({ error: "Maximum limit of 10 connected emails reached." });
+                    }
+                    user.groupId = group._id;
+                    user.role = 'member';
+                    if (!group.memberEmails.includes(email)) {
+                        group.memberEmails.push(email);
+                        await group.save();
+                    }
+                }
+            }
             await user.save();
         }
 
-        // Return user and populated group
         const populatedUser = await User.findOne({ email }).populate('groupId');
 
         res.status(200).json({ message: "User synced successfully", user: populatedUser });

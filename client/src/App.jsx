@@ -5,6 +5,7 @@ import { useAuth } from './context/AuthContext';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import SettingsPage from './pages/SettingsPage';
+import YTVaultDashboard from './pages/YTVaultDashboard';
 
 const ProtectedRoute = ({ children }) => {
     const { currentUser } = useAuth();
@@ -18,6 +19,9 @@ function App() {
             <Routes>
                 <Route path="/" element={<Navigate to="/dashboard" replace />} />
                 <Route path="/login" element={<LoginPage />} />
+                
+                {/* Temporary static prototype route */}
+                <Route path="/ytvault" element={<YTVaultDashboard />} />
                 
                 <Route path="/dashboard" element={
                     <ProtectedRoute>

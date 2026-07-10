@@ -73,11 +73,18 @@ export const decodeFramesFromStream = (videoPath) => {
             leftover = buffer;
         });
 
-        ffmpeg.stderr.on('data', () => { /* ignore */ });
+        ffmpeg.stderr.on('data', (data) => {
+            console.error(`[Decoder FFmpeg Log]: ${data.toString()}`);
+        });
 
         ffmpeg.on('close', (code) => {
-            if (code !== 0) reject(new Error(`FFmpeg exit code ${code}`));
-            else resolve(allBits);
+            if (code !== 0) {
+                console.error(`[Decoder Error]: FFmpeg exited with code ${code}`);
+                reject(new Error(`FFmpeg exit code ${code}`));
+            } else {
+                console.log(`[Decoder] FFmpeg completed successfully`);
+                resolve(allBits);
+            }
         });
     });
 };
@@ -131,24 +138,38 @@ export const removeReedSolomon = (buffer) => {
 };
 
 export const decode = async (videoId, youtubeEmail, ownerEmail, tempDir) => {
-    // 1. download video
-    const videoPath = await downloadVideo(videoId, youtubeEmail, tempDir);
+    try {
+        console.log(`[Decoder] Starting decode for video ${videoId}...`);
+        
+        // 1. download video
+        console.log(`[Decoder] Downloading video from YouTube...`);
+        const videoPath = await downloadVideo(videoId, youtubeEmail, tempDir);
+        console.log(`[Decoder] Download complete: ${videoPath}`);
 
-    // 2. & 3. extract frames & convert frames to buffer via streaming
-    const bits = await decodeFramesFromStream(videoPath);
-    const rsBuffer = bitsToBuffer(bits);
+        // 2. & 3. extract frames & convert frames to buffer via streaming
+        console.log(`[Decoder] Extracting frames...`);
+        const bits = await decodeFramesFromStream(videoPath);
+        const rsBuffer = bitsToBuffer(bits);
+        console.log(`[Decoder] Frame extraction complete.`);
 
-    // 4. remove Reed-Solomon
-    const encryptedBuffer = await removeReedSolomon(rsBuffer);
+        // 4. remove Reed-Solomon
+        console.log(`[Decoder] Removing Reed-Solomon...`);
+        const encryptedBuffer = await removeReedSolomon(rsBuffer);
 
-    // 5. decrypt using ownerEmail
-    const decryptedBuffer = decrypt(encryptedBuffer, ownerEmail);
+        // 5. decrypt using ownerEmail
+        console.log(`[Decoder] Decrypting buffer...`);
+        const decryptedBuffer = decrypt(encryptedBuffer, ownerEmail);
 
-    // 6. delete temp video
-    if (fs.existsSync(videoPath)) {
-        fs.unlinkSync(videoPath);
+        // 6. delete temp video
+        if (fs.existsSync(videoPath)) {
+            fs.unlinkSync(videoPath);
+        }
+
+        console.log(`[Decoder] Decode process successful.`);
+        // 7. return final decrypted Buffer
+        return decryptedBuffer;
+    } catch (error) {
+        console.error(`[Decoder Fatal Error]:`, error);
+        throw error;
     }
-
-    // 7. return final decrypted Buffer
-    return decryptedBuffer;
 };

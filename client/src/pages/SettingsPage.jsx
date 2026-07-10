@@ -1,19 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import Sidebar from '../components/Sidebar';
-import MemberTable from '../components/MemberTable';
 import { useAuth } from '../context/AuthContext';
 import api from '../api/axios';
-import { Youtube, LogOut } from 'lucide-react';
+import { PlaySquare, LogOut, Plus, RefreshCw } from 'lucide-react';
 
 const SettingsPage = () => {
-    const { currentUser, signOut } = useAuth();
+    const { currentUser, signOut, signIn } = useAuth();
     const [members, setMembers] = useState([]);
-    const [groupInput, setGroupInput] = useState('');
-    const [inviteEmail, setInviteEmail] = useState('');
 
     const fetchMembers = async () => {
         try {
-            if (currentUser.backendProfile.groupId) {
+            if (currentUser.backendProfile?.groupId) {
                 const res = await api.get('/group/members');
                 setMembers(res.data.members);
             }
@@ -26,24 +23,25 @@ const SettingsPage = () => {
         fetchMembers();
     }, [currentUser]);
 
-    const handleCreateGroup = async () => {
-        if (!groupInput) return;
+    const handleConnectEmail = async () => {
         try {
-            await api.post('/group/create', { name: groupInput });
-            window.location.reload(); 
+            if (members.length >= 10) {
+                return alert("Maximum limit of 10 connected emails reached.");
+            }
+            const res = await api.post('/group/generate-invite');
+            localStorage.setItem('inviteCode', res.data.inviteCode);
+            await signIn({ prompt: 'select_account' });
         } catch (error) {
             alert(error.response?.data?.error || error.message);
         }
     };
 
-    const handleInvite = async () => {
-        if (!inviteEmail) return;
+    const handleSwitchAccount = async (email) => {
+        if (email === currentUser.backendProfile?.email) return;
         try {
-            await api.post('/group/invite', { emailToInvite: inviteEmail });
-            setInviteEmail('');
-            alert("Invite sent/linked successfully!");
+            await signIn({ emailHint: email });
         } catch (error) {
-            alert(error.response?.data?.error || error.message);
+            console.error("Error switching account:", error);
         }
     };
 
@@ -65,23 +63,22 @@ const SettingsPage = () => {
         }
     };
 
-    const profile = currentUser.backendProfile;
+    const profile = currentUser.backendProfile || currentUser;
 
     return (
-        <div className="flex h-screen bg-slate-900 text-slate-100">
+        <div className="flex h-screen bg-slate-50 text-slate-900">
             <Sidebar />
-            
+
             <main className="flex-1 overflow-y-auto p-8">
                 <div className="max-w-4xl mx-auto space-y-8">
-                    
-                    {}
-                    <section className="bg-slate-800 rounded-xl p-6 border border-slate-700">
+
+                    <section className="bg-white rounded-xl p-6 border border-slate-200 shadow-sm">
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-4">
-                                <img src={profile.photoURL} alt="Avatar" className="w-16 h-16 rounded-full border-2 border-slate-600" />
+                                <img src={profile.photoURL} alt="Avatar" className="w-16 h-16 rounded-full border-2 border-slate-200" />
                                 <div>
                                     <h2 className="text-xl font-bold">{profile.displayName}</h2>
-                                    <p className="text-slate-400">{profile.email}</p>
+                                    <p className="text-slate-500">{profile.email}</p>
                                 </div>
                             </div>
                             <button onClick={signOut} className="flex items-center gap-2 px-4 py-2 bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500/20 transition-colors">
@@ -89,72 +86,84 @@ const SettingsPage = () => {
                                 Sign Out
                             </button>
                         </div>
-                        
-                        <div className="mt-8 pt-6 border-t border-slate-700">
+
+                        <div className="mt-8 pt-6 border-t border-slate-200">
                             <h3 className="text-lg font-semibold mb-4">YouTube Storage Connection</h3>
                             {profile.youtube?.connected ? (
-                                <div className="flex items-center justify-between p-4 bg-slate-900 rounded-lg border border-slate-700">
+                                <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg border border-slate-200">
                                     <div className="flex items-center gap-3">
-                                        <Youtube className="w-6 h-6 text-red-500" />
+                                        <PlaySquare className="w-6 h-6 text-red-500" />
                                         <div>
                                             <p className="font-medium">{profile.youtube.channelName}</p>
-                                            <p className="text-sm text-slate-400">Quota Used: {profile.youtube.quotaUsed} / 10000</p>
+                                            <p className="text-sm text-slate-500">Quota Used: {profile.youtube.quotaUsed} / 10000</p>
                                         </div>
                                     </div>
-                                    <button onClick={handleDisconnectYoutube} className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm transition-colors">
+                                    <button onClick={handleDisconnectYoutube} className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm transition-colors border border-slate-300">
                                         Disconnect
                                     </button>
                                 </div>
                             ) : (
                                 <button onClick={handleConnectYoutube} className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors">
-                                    <Youtube className="w-5 h-5" />
+                                    <PlaySquare className="w-5 h-5" />
                                     Connect YouTube Account
                                 </button>
                             )}
                         </div>
                     </section>
 
-                    {}
-                    <section className="bg-slate-800 rounded-xl p-6 border border-slate-700">
-                        <h3 className="text-lg font-semibold mb-6">Group Management</h3>
-                        
-                        {!profile.groupId ? (
-                            <div className="flex gap-4">
-                                <input 
-                                    type="text" 
-                                    placeholder="New Group Name" 
-                                    value={groupInput}
-                                    onChange={e => setGroupInput(e.target.value)}
-                                    className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 focus:outline-none focus:border-blue-500"
-                                />
-                                <button onClick={handleCreateGroup} className="px-6 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg font-medium transition-colors">
-                                    Create Group
-                                </button>
+                    <section className="bg-white rounded-xl p-6 border border-slate-200 shadow-sm">
+                        <div className="flex items-center justify-between mb-6">
+                            <div>
+                                <h3 className="text-lg font-semibold">Connected Email IDs</h3>
+                                <p className="text-sm text-slate-500">Manage multiple accounts to expand your YouTube storage quota ({members.length}/10)</p>
                             </div>
-                        ) : (
-                            <div className="space-y-6">
-                                {profile.role === 'owner' && (
-                                    <div className="flex gap-4">
-                                        <input 
-                                            type="email" 
-                                            placeholder="Invite Email Address" 
-                                            value={inviteEmail}
-                                            onChange={e => setInviteEmail(e.target.value)}
-                                            className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 focus:outline-none focus:border-blue-500"
-                                        />
-                                        <button onClick={handleInvite} className="px-6 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg font-medium transition-colors">
-                                            Invite Member
-                                        </button>
+                            <button
+                                onClick={handleConnectEmail}
+                                disabled={members.length >= 10}
+                                className="flex items-center gap-2 px-4 py-2 bg-blue-600 disabled:bg-slate-700 disabled:text-slate-500 hover:bg-blue-700 rounded-lg font-medium transition-colors"
+                            >
+                                <Plus className="w-4 h-4" />
+                                Connect Email
+                            </button>
+                        </div>
+
+                        <div className="space-y-3">
+                            {members.map(member => (
+                                <div key={member.email} className={`flex items-center justify-between p-4 rounded-lg border ${member.email === profile.email ? 'bg-blue-50 border-blue-200' : 'bg-slate-50 border-slate-200'}`}>
+                                    <div className="flex items-center gap-4">
+                                        <img src={member.photoURL || `https://ui-avatars.com/api/?name=${member.displayName}`} alt="Avatar" className="w-10 h-10 rounded-full bg-slate-200" />
+                                        <div>
+                                            <p className="font-medium flex items-center gap-2">
+                                                {member.displayName || member.email.split('@')[0]}
+                                                {member.email === profile.email && <span className="text-xs bg-blue-600 text-white px-2 py-0.5 rounded-full">Current</span>}
+                                            </p>
+                                            <p className="text-sm text-slate-500">{member.email}</p>
+                                        </div>
                                     </div>
-                                )}
-                                
-                                <MemberTable 
-                                    members={members} 
-                                    isOwner={profile.role === 'owner'}
-                                    onMemberRemoved={fetchMembers}
-                                />
-                            </div>
-                        )}
+                                    <div className="flex items-center gap-4">
+                                        {member.youtube?.connected ? (
+                                            <span className="text-sm text-emerald-400 bg-emerald-400/10 px-3 py-1 rounded-full flex items-center gap-1">
+                                                <PlaySquare className="w-3 h-3" /> Connected
+                                            </span>
+                                        ) : (
+                                            <span className="text-sm text-amber-400 bg-amber-400/10 px-3 py-1 rounded-full">
+                                                Not Connected
+                                            </span>
+                                        )}
+                                        {member.email !== profile.email && (
+                                            <button
+                                                onClick={() => handleSwitchAccount(member.email)}
+                                                className="flex items-center gap-2 px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 rounded-lg text-sm transition-colors border border-slate-300"
+                                                title="Switch to this account with one click"
+                                            >
+                                                <RefreshCw className="w-3 h-3" />
+                                                Switch & Re-login
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
                     </section>
                 </div>
             </main>

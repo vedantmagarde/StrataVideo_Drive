@@ -11,6 +11,7 @@ const formatBytes = (bytes, decimals = 2) => {
 };
 
 const getIcon = (mimeType) => {
+    if (!mimeType) return <File className="w-8 h-8 text-slate-400" />;
     if (mimeType.startsWith('image/')) return <Image className="w-8 h-8 text-blue-400" />;
     if (mimeType.startsWith('video/')) return <Film className="w-8 h-8 text-purple-400" />;
     if (mimeType.startsWith('audio/')) return <Music className="w-8 h-8 text-yellow-400" />;
@@ -36,28 +37,28 @@ const getStatusBadge = (status) => {
 
 const FileCard = ({ file, onDelete, onDownload }) => {
     return (
-        <div className="bg-slate-800 rounded-xl p-5 border border-slate-700 hover:border-slate-600 transition-all group shadow-sm hover:shadow-xl">
+        <div className="bg-white rounded-xl p-5 border border-slate-200 hover:border-slate-300 transition-all group shadow-sm hover:shadow-xl">
             <div className="flex justify-between items-start mb-4">
-                <div className="p-3 bg-slate-900 rounded-lg">
+                <div className="p-3 bg-slate-50 rounded-lg">
                     {getIcon(file.mimeType)}
                 </div>
                 {getStatusBadge(file.status)}
             </div>
             
-            <h3 className="font-semibold text-slate-200 truncate mb-1" title={file.filename}>
+            <h3 className="font-semibold text-slate-900 truncate mb-1" title={file.filename}>
                 {file.filename}
             </h3>
             
-            <div className="flex items-center justify-between mt-4 text-sm text-slate-400">
+            <div className="flex items-center justify-between mt-4 text-sm text-slate-500">
                 <span>{formatBytes(file.sizeBytes)}</span>
                 <span>{new Date(file.uploadedAt).toLocaleDateString()}</span>
             </div>
 
-            <div className="mt-5 flex gap-2 pt-4 border-t border-slate-700 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="mt-5 flex gap-2 pt-4 border-t border-slate-200 opacity-0 group-hover:opacity-100 transition-opacity">
                 <button 
                     onClick={onDownload}
                     disabled={file.status !== 'ready'}
-                    className="flex-1 flex items-center justify-center gap-2 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex-1 flex items-center justify-center gap-2 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                     <Download className="w-4 h-4" /> Download
                 </button>

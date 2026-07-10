@@ -122,3 +122,27 @@ export const getMembers = async (req, res) => {
         res.status(500).json({ error: "Internal server error" });
     }
 };
+
+export const generateInvite = async (req, res) => {
+    try {
+        const { email } = req.user;
+        const user = await User.findOne({ email }).populate('groupId');
+        if (!user.groupId) {
+            return res.status(403).json({ error: "User is not in a group" });
+        }
+
+        const group = user.groupId;
+        if (group.memberEmails.length >= 10) {
+            return res.status(400).json({ error: "Maximum limit of 10 connected emails reached." });
+        }
+
+        const inviteCode = Math.random().toString(36).substring(2, 10);
+        group.inviteCode = inviteCode;
+        await group.save();
+
+        res.status(200).json({ inviteCode });
+    } catch (error) {
+        console.error("Error generating invite:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};

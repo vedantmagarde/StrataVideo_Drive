@@ -1,5 +1,5 @@
+import "dotenv/config";
 import express from "express";
-import dotenv from "dotenv";
 import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
@@ -10,10 +10,6 @@ import groupRoutes from "./routes/groupRoutes.js";
 import youtubeRoutes from "./routes/youtubeRoutes.js";
 import fileRoutes from "./routes/fileRoutes.js";
 import fs from "fs";
-
-
-dotenv.config();
-
 
 const tmpDir = './tmp';
 if (!fs.existsSync(tmpDir)){

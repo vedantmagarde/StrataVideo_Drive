@@ -87,13 +87,17 @@ export const renderFramesToVideo = (bits, outputPath) => {
         ]);
 
         ffmpeg.stderr.on('data', (data) => {
-            
-            
+            console.error(`[Encoder FFmpeg Log]: ${data.toString()}`);
         });
 
         ffmpeg.on('close', (code) => {
-            if (code === 0) resolve(outputPath);
-            else reject(new Error(`FFmpeg exited with code ${code}`));
+            if (code === 0) {
+                console.log(`[Encoder] FFmpeg completed successfully for ${outputPath}`);
+                resolve(outputPath);
+            } else {
+                console.error(`[Encoder Error]: FFmpeg exited with code ${code}`);
+                reject(new Error(`FFmpeg exited with code ${code}`));
+            }
         });
 
         
@@ -149,19 +153,25 @@ export const renderFramesToVideo = (bits, outputPath) => {
 };
 
 export const encode = async (chunkBuffer, email, tempDir) => {
-    
-    const encryptedBuffer = encrypt(chunkBuffer, email);
-    
-    
-    const rsBuffer = await applyReedSolomon(encryptedBuffer);
+    try {
+        console.log(`[Encoder] Starting encode for user ${email}. Chunk size: ${chunkBuffer.length} bytes`);
+        const encryptedBuffer = encrypt(chunkBuffer, email);
+        console.log(`[Encoder] Encryption complete.`);
+        
+        const rsBuffer = await applyReedSolomon(encryptedBuffer);
+        console.log(`[Encoder] Reed-Solomon applied.`);
 
-    
-    const bits = bufferToBits(rsBuffer);
+        const bits = bufferToBits(rsBuffer);
+        
+        const outputPath = path.join(tempDir, `${uuidv4()}.mp4`);
+        console.log(`[Encoder] Rendering frames to video at ${outputPath}...`);
+        
+        await renderFramesToVideo(bits, outputPath);
+        console.log(`[Encoder] Video rendering complete: ${outputPath}`);
 
-    
-    const outputPath = path.join(tempDir, `${uuidv4()}.mp4`);
-    await renderFramesToVideo(bits, outputPath);
-
-    
-    return outputPath;
+        return outputPath;
+    } catch (error) {
+        console.error(`[Encoder Fatal Error]:`, error);
+        throw error;
+    }
 };

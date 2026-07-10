@@ -30,8 +30,8 @@ const DashboardPage = () => {
     };
 
     const handleJobComplete = () => {
-        fetchFiles(); 
-        
+        fetchFiles();
+
     };
 
     const handleFileDelete = async (fileId) => {
@@ -55,11 +55,11 @@ const DashboardPage = () => {
     };
 
     return (
-        <div className="flex h-screen bg-slate-900 text-slate-100">
+        <div className="flex h-screen bg-slate-50 text-slate-900">
             <Sidebar />
             
             <main className="flex-1 flex flex-col overflow-hidden">
-                <header className="h-16 border-b border-slate-800 flex items-center justify-between px-8 bg-slate-900/50 backdrop-blur">
+                <header className="h-16 border-b border-slate-200 flex items-center justify-between px-8 bg-white/50 backdrop-blur">
                     <div className="relative w-96">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                         <input 
@@ -67,7 +67,7 @@ const DashboardPage = () => {
                             placeholder="Search files..." 
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            className="w-full bg-slate-800 border border-slate-700 rounded-lg pl-10 pr-4 py-2 text-sm focus:outline-none focus:border-blue-500 transition-colors"
+                            className="w-full bg-white border border-slate-200 rounded-lg pl-10 pr-4 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors shadow-sm"
                         />
                     </div>
                     <UploadButton onQueued={handleUploadQueued} />
@@ -77,17 +77,17 @@ const DashboardPage = () => {
                     <div className="mb-6">
                         <h2 className="text-2xl font-bold">My Files</h2>
                     </div>
-                    
+
                     {files.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center h-64 border-2 border-dashed border-slate-700 rounded-xl">
-                            <p className="text-slate-400">No files found. Upload something to get started!</p>
+                        <div className="flex flex-col items-center justify-center h-64 border-2 border-dashed border-slate-300 bg-white rounded-xl">
+                            <p className="text-slate-500">No files found. Upload something to get started!</p>
                         </div>
                     ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                             {files.map(file => (
-                                <FileCard 
-                                    key={file._id} 
-                                    file={file} 
+                                <FileCard
+                                    key={file._id}
+                                    file={file}
                                     onDelete={() => handleFileDelete(file._id)}
                                     onDownload={() => handleFileDownload(file._id)}
                                 />
@@ -96,16 +96,16 @@ const DashboardPage = () => {
                     )}
                 </div>
 
-                {}
+                { }
                 <div className="fixed bottom-4 right-4 flex flex-col gap-2 w-80">
                     {activeJobs.map(jobId => (
-                        <JobStatusPoller 
-                            key={jobId} 
-                            jobId={jobId} 
+                        <JobStatusPoller
+                            key={jobId}
+                            jobId={jobId}
                             onComplete={() => {
                                 handleJobComplete();
                                 setActiveJobs(prev => prev.filter(id => id !== jobId));
-                            }} 
+                            }}
                             onFailed={() => {
                                 setActiveJobs(prev => prev.filter(id => id !== jobId));
                             }}

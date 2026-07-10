@@ -121,11 +121,21 @@ export const getValidToken = async (email) => {
 };
 
 
-export const getAvailableAccount = async (groupId) => {
-    const members = await User.find({ groupId, 'youtube.connected': true });
+export const getAvailableAccount = async (identifier) => {
+    // Identifier can be a groupId or an email address (ownerEmail fallback)
+    let query = {};
+    if (identifier && identifier.includes('@')) {
+        // It's an email address
+        query = { email: identifier, 'youtube.connected': true };
+    } else {
+        // It's a groupId
+        query = { groupId: identifier, 'youtube.connected': true };
+    }
+
+    const members = await User.find(query);
     
     if (!members.length) {
-        throw new Error("No connected YouTube accounts found in this group.");
+        throw new Error("No connected YouTube accounts found. Please connect your YouTube account in the dashboard first.");
     }
 
     

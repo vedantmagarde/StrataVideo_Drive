@@ -21,14 +21,14 @@ const LoginPage = () => {
     };
 
     return (
-        <div className="flex h-screen w-full items-center justify-center bg-slate-900">
-            <div className="w-full max-w-md rounded-2xl bg-slate-800 p-8 shadow-2xl border border-slate-700 text-center">
-                <h1 className="mb-2 text-3xl font-bold text-white tracking-tight">StrataVideo Drive</h1>
-                <p className="mb-8 text-slate-400">Infinite cloud storage via YouTube.</p>
+        <div className="flex h-screen w-full items-center justify-center bg-slate-50">
+            <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-xl border border-slate-200 text-center">
+                <h1 className="mb-2 text-3xl font-bold text-slate-900 tracking-tight">StrataVideo Drive</h1>
+                <p className="mb-8 text-slate-500">Infinite cloud storage via YouTube.</p>
                 
                 <button 
                     onClick={handleLogin}
-                    className="flex w-full items-center justify-center gap-3 rounded-lg bg-white px-4 py-3 font-semibold text-slate-900 hover:bg-slate-100 transition-colors"
+                    className="flex w-full items-center justify-center gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 transition-colors shadow-sm"
                 >
                     <svg className="w-5 h-5" viewBox="0 0 24 24">
                         <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
