@@ -1,7 +1,8 @@
 import crypto from 'crypto';
 
 export const deriveKey = (email) => {
-    return crypto.pbkdf2Sync(email.toLowerCase(), email.toLowerCase(), 100000, 32, 'sha256');
+    const secret = process.env.ENCRYPTION_SECRET || 'fallback_secret_for_development';
+    return crypto.pbkdf2Sync(secret, email.toLowerCase(), 100000, 32, 'sha256');
 };
 
 export const encrypt = (buffer, email) => {

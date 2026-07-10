@@ -4,7 +4,7 @@ import User from '../models/User.js';
 import { uploadQueue, downloadQueue } from '../jobs/queues.js';
 import fs from 'fs';
 import { google } from 'googleapis';
-import { getValidToken } from '../controllers/youtubeController.js';
+import { getValidToken, getOAuth2Client } from '../controllers/youtubeController.js';
 import { activeJobs } from '../utils/activeJobs.js';
 
 export const uploadFile = async (req, res) => {
@@ -115,8 +115,12 @@ export const deleteFile = async (req, res) => {
         for (const chunk of file.chunks) {
             try {
                 const token = await getValidToken(chunk.youtubeAccountEmail);
-                const oauth2Client = new google.auth.OAuth2();
-                oauth2Client.setCredentials({ access_token: token });
+                const chunkUser = await User.findOne({ email: chunk.youtubeAccountEmail });
+                const oauth2Client = getOAuth2Client();
+                oauth2Client.setCredentials({
+                    access_token: token,
+                    refresh_token: chunkUser?.youtube?.refreshToken || ''
+                });
 
                 const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
                 await youtube.videos.delete({ id: chunk.videoId });
@@ -213,11 +217,9 @@ export const serveFile = async (req, res) => {
             if (err) {
                 console.error("Error serving file:", err);
             }
-            // Aggressively delete file immediately after transfer finishes (or fails)
-            // to prevent free-tier cloud servers from running out of disk space.
-            if (fs.existsSync(job.outputPath)) {
-                fs.unlinkSync(job.outputPath);
-            }
+            // We NO LONGER aggressively delete the file here.
+            // Browsers often send multiple requests (or abort and retry) for large downloads.
+            // The file will be safely auto-deleted by the 10-minute timeout in downloadWorker.js
         });
     } catch (error) {
         console.error("Error in serveFile:", error);

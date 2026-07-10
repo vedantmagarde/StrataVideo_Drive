@@ -1,179 +1,166 @@
 <!-- StrataVideo Drive -->
 
-#  YouTube Infinite Storage — Project Roadmap
+# 📹 YTVault — Infinite Cloud Storage using YouTube
 
-> **Project:** YTVault — Infinite Cloud Storage using YouTube as a backend  
-> **Stack:** MongoDB · Express · React · Node.js (MERN)  
-> **Architecture:** Users connect their own YouTube accounts via OAuth2. Files are encrypted (AES-256), chunked, encoded as B&W block videos via FFmpeg, and uploaded to YouTube. Only metadata is stored in MongoDB.
+**YTVault** is a MERN-stack application that provides infinite, free cloud storage by treating YouTube as a backend file system. Users connect their YouTube accounts via OAuth2, and files are encrypted, chunked, encoded into black-and-white block videos using FFmpeg, and uploaded as unlisted videos. Only lightweight metadata is stored in MongoDB.
 
 ---
 
-## 📌 Legend
+## 🏗 System Architecture & Flow
+
+To understand the core of YTVault, you need to understand the **Encoding/Decoding Pipeline** and how background workers handle heavy lifting asynchronously.
+
+### ⬆️ The Upload & Encode Pipeline
+
+When a user uploads a file, it does not go directly to YouTube. It hits a temporary storage location, gets queued in Redis, and a background worker handles the complex encoding.
+
+```mermaid
+sequenceDiagram
+    participant User as React UI (Client)
+    participant API as Express API
+    participant Bull as BullMQ (Redis Queue)
+    participant Worker as Upload Worker
+    participant DB as MongoDB
+    participant YT as YouTube API
+
+    User->>API: POST /api/files/upload (File)
+    API->>DB: Create Job & File (status: pending)
+    API->>Bull: Add to uploadQueue
+    API-->>User: Return jobId
+    Bull->>Worker: Pick up job
+    Worker->>DB: Fetch lowest-quota YouTube Account
+    loop For each 50MB chunk
+        Worker->>Worker: Encrypt chunk (AES-256)
+        Worker->>Worker: Pipe to FFmpeg stdin (Encode to MP4)
+        Worker->>Worker: Delay 2-5 mins (Avoid Rate Limits)
+        Worker->>YT: POST /upload/youtube/v3/videos
+        YT-->>Worker: Return videoId
+        Worker->>DB: Update File (push chunk metadata)
+    end
+    Worker->>DB: Update Job status to 'ready'
+    Worker->>Worker: Trigger 'Upload Complete' Email
+```
+
+### ⬇️ The Download & Decode Pipeline
+
+When a user requests a download, the worker uses `yt-dlp` to fetch the raw video stream, pipes it directly into FFmpeg to extract the pixels, decrypts them, and reassembles the binary.
+
+```mermaid
+sequenceDiagram
+    participant User as React UI (Client)
+    participant API as Express API
+    participant Bull as BullMQ (Redis Queue)
+    participant Worker as Download Worker
+    participant YT as YouTube (yt-dlp)
+    
+    User->>API: POST /api/files/download/:fileId
+    API->>Bull: Add to downloadQueue
+    API-->>User: Return jobId
+    Bull->>Worker: Pick up job
+    loop For each chunk (videoId)
+        Worker->>YT: yt-dlp fetch unlisted video
+        YT-->>Worker: Stream raw video
+        Worker->>Worker: FFmpeg extract rawvideo frames
+        Worker->>Worker: Read 16x16 pixel blocks back to binary
+        Worker->>Worker: Decrypt (AES-256)
+    end
+    Worker->>Worker: Reassemble chunks -> /tmp/uuid_filename
+    Worker->>Worker: Update Job (status: ready, path: /tmp/...)
+    Worker->>User: Email "Download Ready"
+    User->>API: GET /api/files/serve/:jobId
+    API-->>User: Serve file binary
+    API->>API: Auto-delete from /tmp
+```
+
+---
+
+## 📁 Project Structure (The 3 Main Folders)
+
+The project is strictly separated into three main architectural domains:
+
+### 1. `/client` (The Frontend)
+Built with React, Vite, and Tailwind CSS v3.
+- **`src/pages`**: Contains the core views (`Dashboard`, `Settings`, `Login`).
+- **`src/context/AuthContext.jsx`**: Manages the Firebase Google Sign-In state and automatically injects the Firebase ID Token into all outbound Axios requests.
+- **`src/components`**: UI elements like the `FileCard` and the `JobStatusPoller` which actively queries the backend to show real-time progress bars for uploads/downloads.
+
+### 2. `/server/controllers` & `/server/routes` (The API Layer)
+The standard Express endpoints that the frontend talks to.
+- **`authController.js`**: Verifies Firebase tokens and syncs Users/Groups in MongoDB.
+- **`fileController.js`**: Handles Multer file uploads, dispatches jobs to BullMQ, and serves finished files.
+- **`youtubeController.js`**: Handles the Google OAuth2 flow, exchanging auth codes for access/refresh tokens.
+
+### 3. `/server/jobs` & `/server/utils` (The Engine Room)
+This is where the heavy lifting occurs asynchronously, entirely decoupled from the API layer.
+- **`encoder.js` & `decoder.js`**: The brains of the operation. Uses `child_process.spawn` to directly stream binary data into FFmpeg as raw pixels, bypassing disk I/O bottlenecks.
+- **`encryption.js`**: Secures all data using AES-256-CBC before it touches FFmpeg.
+- **`uploadWorker.js` & `downloadWorker.js`**: The BullMQ consumers. They process the queues, manage YouTube API interactions, handle retries, and dispatch emails via Resend.
+
+---
+
+## 🛡️ Security & Authentication (Recent Updates)
+
+To ensure enterprise-grade stability and security, we have recently solidified two critical systems:
+
+1. **AES-256 Dynamic Encryption:**
+   - **Previously:** The AES key was derived purely from the user's email address.
+   - **Update:** The `deriveKey` function in `encryption.js` now uses a secret salt (`ENCRYPTION_SECRET`) securely loaded from your `.env` file. This means even if someone knows your email and intercepts the YouTube video, they cannot derive the key without the server's master secret.
+2. **Robust OAuth2 Client State:**
+   - **Previously:** Background workers (and delete functions) instantiated a blank `OAuth2` client using just the `access_token`. This failed (`401 UNAUTHENTICATED`) when tokens became slightly stale.
+   - **Update:** All workers now utilize `getOAuth2Client()` which injects your `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`. We also strictly pass the `refresh_token` to `setCredentials()`. This allows the Google SDK to automatically and silently refresh tokens under the hood, completely eliminating authentication crashes.
+
+---
+
+## 🗺 Development Roadmap & Phase Checklist
 
 | Symbol | Meaning |
 |---|---|
 | ✅ | Done |
 | 🔄 | In Progress |
 | ⬜ | Not Started |
-| 🔴 | Blocked |
-| ⚠️ | Needs Decision |
 
----
+### 🟩 Phase 1 — Project Foundation
+- ✅ Initialize Node.js + Express backend & Connect MongoDB Atlas
+- ✅ Setup `.env` file with keys (Mongo URI, Firebase, YouTube, Redis, Resend)
+- ✅ Initialize React frontend with Vite & Tailwind CSS v3
+- ✅ Setup basic Express server and connect frontend to backend via Axios
 
-## 🟩 Phase 1 — Project Foundation
-> Goal: Bare minimum working backend + frontend shell
-
-- ✅ Initialize Node.js + Express backend
-- ✅ Connect MongoDB Atlas
-- ✅ Setup folder structure (`/server/jobs`, `/server/utils`, `/client/src/pages`, etc.)
-- ✅ Setup `.env` file with keys (Mongo URI, Firebase credentials, YouTube client ID/secret, Redis URL, Resend Key)
-- ✅ Initialize React frontend with Vite
-- ✅ Setup Tailwind CSS v3
-- ✅ Setup basic Express server with health check route (`GET /api/health`)
-- ✅ Connect frontend to backend via Axios
-
----
-
-## 🟨 Phase 2 — Group-Based User Authentication
-> Goal: Users can register, login, and manage a group of emails securely without passwords.
-
-### Backend
-- ✅ Design `Group` schema (tracks `ownerEmail`, `memberEmails`, `invitedEmails`)
-- ✅ Design `User` schema (linked to `groupId`)
-- ✅ 100% Firebase Authentication (Google Sign-In only) — zero passwords, zero bcrypt, zero JWTs.
-- ✅ Custom `verifyFirebaseToken` middleware to protect private routes using the decoded Firebase ID token.
-- ✅ `POST /api/auth/sync` — automatically creates user/group records and auto-links invited members.
-- ✅ `GET /api/group/members` — lists all group members + YouTube connection status.
-- ✅ `POST /api/group/invite` and `DELETE /api/group/remove` for owner management.
-
-### Frontend
-- ✅ Login page with Google OAuth button.
+### 🟨 Phase 2 — Group-Based User Authentication
+- ✅ Design `Group` and `User` schemas
+- ✅ 100% Firebase Authentication (Google Sign-In only) — zero passwords.
+- ✅ Custom `verifyFirebaseToken` middleware to protect private routes.
+- ✅ Auto-linking of invited members to Vaults.
 - ✅ Protected route wrapper in React utilizing AuthContext.
-- ✅ Firebase ID Token is automatically attached to every Axios request via interceptors (never stored in `localStorage`).
-- ✅ Auto redirect to dashboard on login.
 
----
-
-## 🟦 Phase 3 — YouTube OAuth2 Integration
-> Goal: Each group member can connect their own YouTube account
-
-### Backend
+### 🟦 Phase 3 — YouTube OAuth2 Integration
 - ✅ Setup Google OAuth2 credentials (`googleapis`).
-- ✅ Design embedded `youtube` object in User schema to store tokens, channel ID, and `quotaUsed`.
-- ✅ `GET /api/youtube/auth` — redirect to Google OAuth2 consent screen.
-- ✅ `POST /api/youtube/callback` — exchange OAuth2 authorization code for tokens.
-- ✅ `POST /api/youtube/disconnect` — disconnect YouTube account.
-- ✅ Internal token refresh logic (`getValidToken()`).
+- ✅ YouTube account connection flow (`auth`, `callback`, `disconnect`).
 - ✅ Quota tracking — increment `quotaUsed` by 1600 per upload.
-- ✅ Account rotation logic — automatically selects the group member's connected account with the lowest used quota.
-- ✅ Node-cron midnight job to reset `quotaUsed` to 0 daily.
+- ✅ Account rotation logic — automatically selects the group member's account with the lowest quota.
 
-### Frontend
-- ✅ Settings page → Profile and Group management section.
-- ✅ Table showing all group member emails, roles, YouTube connection status, and visual Quota usage bars.
-- ✅ "Connect YouTube Account" and "Disconnect" flow.
+### 🟪 Phase 4 — File Encoder / Decoder Pipeline
+- ✅ AES-256 encryption (`crypto.createCipheriv`).
+- ✅ **Encoder:** Read file in 50MB chunks -> stream raw RGBA pixels to `ffmpeg.stdin` -> Output MP4.
+- ✅ **Decoder:** `yt-dlp` download -> FFmpeg extract rawvideo -> decrypt -> reassemble.
 
----
+### 🟧 Phase 5 — Upload / Download Job Queue
+- ✅ Implemented `bull` message queue backed by Upstash Redis.
+- ✅ `uploadWorker` handles async encoding and rate-limited uploading.
+- ✅ `downloadWorker` handles async downloading, decoding, and writing to `/tmp`.
 
-## 🟪 Phase 4 — File Encoder / Decoder Pipeline
-> Goal: Convert any file ↔ YouTube video reliably, bypassing I/O bottlenecks.
+### 🟫 Phase 6 — File Metadata & Dashboard
+- ✅ `GET /api/files` with MIME-type filtering capabilities.
+- ✅ `DELETE /api/files/:fileId` properly cleans up unlisted YouTube videos using `getOAuth2Client`.
+- ✅ Real-time `JobStatusPoller` on the frontend for progress bars.
 
-### Encoder (File → Video)
-- ✅ Read file as raw bytes in 50MB chunks.
-- ✅ AES-256 encryption (`crypto.createCipheriv`) utilizing a persistent key derived from the owner's email (`pbkdf2Sync`).
-- ✅ Reed-Solomon error correction structure setup (`@ronomon/reed-solomon`).
-- ✅ **Optimized Encoding Pipeline:** Bypassed writing 116k PNG frames to disk by streaming raw RGBA pixels directly to `ffmpeg.stdin` using `spawn`.
-- ✅ Rendered at `30 fps` to generate a ~1.07-hour video per 50MB chunk, safely bypassing YouTube's 12-hour maximum limit.
-- ✅ Output: one `.mp4` generated in `/tmp` per chunk.
+### 📧 Phase 7 — Email Notifications
+- ✅ Integrated Resend SDK for HTML templates.
+- ✅ Dispatches `sendUploadComplete`, `sendUploadFailed`, and `sendDownloadReady` from queues.
 
-### Decoder (Video → File)
-- ✅ Download unlisted chunk videos using `yt-dlp` injected with the owner's specific YouTube Bearer token.
-- ✅ **Optimized Decoding Pipeline:** Spawned FFmpeg to pipe raw `-f rawvideo` directly to `stdout`, reading chunks seamlessly in-memory and sampling center pixels of the 16x16 blocks.
-- ✅ Remove Reed-Solomon padding and error correct.
-- ✅ AES-256 decrypt using the email-derived key.
-- ✅ Reassemble chunks strictly by sequence index and yield original binary.
-
----
-
-## 🟧 Phase 5 — Upload / Download Job Queue
-> Goal: Handle slow YouTube uploads asynchronously with background jobs.
-
-### Setup
-- ✅ Setup Upstash Redis connection.
-- ✅ Implemented `bull` message queue (`uploadQueue`, `downloadQueue`).
-
-### Upload Flow
-- ✅ `POST /api/files/upload` — Multer handles file, queues job, returns `jobId`.
-- ✅ Worker rotates accounts, encodes 50MB chunk via stream, delays 2-5 minutes randomly to avoid YouTube rate limits, and uploads via YouTube Data API.
-- ✅ File chunks array saved to MongoDB with respective `videoId`.
-
-### Download Flow
-- ✅ `POST /api/files/download/:fileId` — triggers download background job.
-- ✅ Worker downloads chunks via `yt-dlp`, extracts bitstream, decrypts, and reassembles to `/tmp`.
-- ✅ Secure `/api/files/serve/:jobId` route safely serves the final binary to the browser and automatically deletes it from the server.
-
----
-
-## 🟫 Phase 6 — File Metadata & Dashboard
-> Goal: Users can see, manage, and organize their files
-
-### Backend
-- ✅ `File` and `Job` schemas constructed.
-- ✅ `GET /api/files` and `GET /api/files/search` implemented with MIME-type filtering capabilities.
-- ✅ `DELETE /api/files/:fileId` recursively deletes MongoDB records AND loops through all chunks to actively delete the unlisted YouTube videos from the respective accounts.
-- ✅ `GET /api/files/status/:jobId` serves progress polling for active queues.
-
-### Frontend Dashboard
-- ✅ Sidebar navigation to filter by Images, Videos, Audio, Documents, Archives, and Code.
-- ✅ Dynamic `FileCard` component displaying size, upload date, status badges, and respective file-type icons.
-- ✅ `UploadButton` mapping local system file dialog directly to Multer upload API.
-- ✅ Floating `JobStatusPoller` drawer actively listens to active Queue jobs and tracks progress bars in real-time.
-
----
-
-## 📧 Phase 7 — Email Notifications
-> Goal: Notify user when file is ready (since uploads take time)
-
-- ✅ Integrated Resend SDK.
-- ✅ Configured HTML templates injected with dynamic filenames and completion emojis.
-- ✅ Dispatches `sendUploadComplete`, `sendUploadFailed`, and `sendDownloadReady` straight from the Bull queue worker processes.
-
----
-
-## 🚀 Phase 8 — Deployment
-> Goal: Production scaffolding.
-
-- ✅ Configured `Dockerfile` mapping `node:20-slim`, `ffmpeg`, and `yt-dlp` directly into the container logic for backend rendering.
-- ✅ Scaffolded `render.yaml` infrastructure-as-code for server deployment.
-- ✅ Setup `vercel.json` SPA rewrite configurations.
-
----
-
-## 🛠 Phase 9 — Server Stability & Security Updates
-> Goal: Fix module loading, environment parsing, and dependency issues for robust startup.
-
-- ✅ Upgraded Firebase Admin SDK to v14 and refactored initialization to use the new modular API (`firebase-admin/app`).
-- ✅ Fixed ES Module hoisting issues by loading `dotenv/config` globally at the top of the application.
-- ✅ Installed and configured missing security and worker dependencies (`helmet`, `express-rate-limit`, `node-cron`, `file-type`).
-- ✅ Improved `.env` parsing flexibility (support for both base64 `FIREBASE_SERVICE_ACCOUNT` and individual Firebase variables, plus `MONGO_URI` support).
-
----
-
-## 🧰 Full Tech Stack Reference
-
-| Category | Tool |
-|---|---|
-| Frontend | React + Vite + Tailwind CSS v3 |
-| Backend | Node.js + Express |
-| Database | MongoDB Atlas + Mongoose |
-| Auth | Firebase Auth + Google Sign-In (No Passwords) |
-| YouTube | Google OAuth2 + YouTube Data API v3 |
-| Encoding | FFmpeg (via `child_process.spawn` stdin/stdout streams) |
-| Error Correction | `@ronomon/reed-solomon` |
-| Encryption | Node.js built-in `crypto` (AES-256-CBC) |
-| Job Queue | Bull + Upstash Redis |
-| Video Fetching | `yt-dlp` |
-| Email | Resend |
+### 🚀 Phase 8 — Deployment & Stability
+- ✅ Configured `Dockerfile` mapping `ffmpeg`, and `yt-dlp`.
+- ✅ Upgraded Firebase Admin SDK to v14 (Modular API).
+- ✅ Re-architected OAuth client instantiation across all background workers to prevent `401` token drops.
 
 ---
 

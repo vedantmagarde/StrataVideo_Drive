@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import api from '../api/axios';
+import { auth } from '../firebase';
 import { CheckCircle2, XCircle, Loader2, Download, X } from 'lucide-react';
 
 const JobStatusPoller = ({ jobId, onComplete, onFailed }) => {
@@ -45,13 +46,16 @@ const JobStatusPoller = ({ jobId, onComplete, onFailed }) => {
         if (!downloadData) return;
         setIsDownloading(true);
         try {
-            const url = downloadData.url.startsWith('/api') 
+            const token = await auth.currentUser.getIdToken(true);
+            const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+            const urlPath = downloadData.url.startsWith('/api') 
                 ? downloadData.url.replace('/api', '') 
                 : downloadData.url;
-            const response = await api.get(url, { responseType: 'blob' });
-            const urlBlob = window.URL.createObjectURL(new Blob([response.data]));
+            
+            const fullUrl = `${baseUrl}${urlPath}?token=${token}`;
+            
             const link = document.createElement('a');
-            link.href = urlBlob;
+            link.href = fullUrl;
             link.setAttribute('download', downloadData.filename); 
             document.body.appendChild(link);
             link.click();

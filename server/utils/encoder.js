@@ -14,20 +14,20 @@ try {
     console.warn("Reed-Solomon not loaded (likely on Windows dev). It will mock RS in dev.");
 }
 
-const BLOCK_SIZE = 16;
-const WIDTH = 1280;
-const HEIGHT = 720;
+const BLOCK_SIZE = 8;
+const WIDTH = 1920;
+const HEIGHT = 1080;
 const BLOCKS_X = Math.floor(WIDTH / BLOCK_SIZE);
 const BLOCKS_Y = Math.floor(HEIGHT / BLOCK_SIZE);
-const BITS_PER_FRAME = BLOCKS_X * BLOCKS_Y; 
+const BITS_PER_FRAME = BLOCKS_X * BLOCKS_Y;
 
 export const applyReedSolomon = (buffer) => {
     if (!RS || !RS.default) {
         console.warn("Skipping RS encode (mocking)");
         return buffer;
     }
-    
-    
+
+
     const dataShards = 10;
     const parityShards = 2;
     const totalShards = dataShards + parityShards;
@@ -72,18 +72,18 @@ export const bufferToBits = (buffer) => {
 
 export const renderFramesToVideo = (bits, outputPath, jobId, onProgress) => {
     return new Promise((resolve, reject) => {
-        
+
         const ffmpeg = spawn(ffmpegPath, [
             '-y',
             '-f', 'rawvideo',
             '-vcodec', 'rawvideo',
             '-s', `${WIDTH}x${HEIGHT}`,
             '-pix_fmt', 'rgba',
-            '-r', '30', 
-            '-i', '-', 
+            '-r', '60',
+            '-i', '-',
             '-c:v', 'libx264',
-            '-crf', '0', 
-            '-preset', 'ultrafast',
+            '-crf', '18',
+            '-preset', 'veryfast',
             '-pix_fmt', 'yuv420p',
             outputPath
         ]);
@@ -96,9 +96,13 @@ export const renderFramesToVideo = (bits, outputPath, jobId, onProgress) => {
             console.error(`[Encoder FFmpeg Log]: ${data.toString()}`);
         });
 
+        ffmpeg.stdin.on('error', (err) => {
+            console.error('[Encoder] FFmpeg stdin error (likely disk full or process killed):', err.message);
+        });
+
         ffmpeg.on('close', (code) => {
             if (jobId) activeJobs.delete(jobId);
-            
+
             if (code === 0) {
                 console.log(`[Encoder] FFmpeg completed successfully for ${outputPath}`);
                 resolve(outputPath);
@@ -108,9 +112,9 @@ export const renderFramesToVideo = (bits, outputPath, jobId, onProgress) => {
             }
         });
 
-        
+
         const numFrames = Math.ceil(bits.length / BITS_PER_FRAME);
-        const rgbaSize = WIDTH * HEIGHT * 4; 
+        const rgbaSize = WIDTH * HEIGHT * 4;
 
         const writeFrames = () => {
             let i = 0;
@@ -122,33 +126,33 @@ export const renderFramesToVideo = (bits, outputPath, jobId, onProgress) => {
                 let ok = true;
                 while (i < numFrames && ok) {
                     const frameBuffer = Buffer.alloc(rgbaSize);
-                    
+
                     for (let y = 0; y < BLOCKS_Y; y++) {
                         for (let x = 0; x < BLOCKS_X; x++) {
                             const bit = (bitOffset < bits.length) ? bits[bitOffset] : 0;
                             bitOffset++;
 
                             const color = bit === 1 ? 255 : 0;
-                            
+
                             for (let by = 0; by < BLOCK_SIZE; by++) {
                                 for (let bx = 0; bx < BLOCK_SIZE; bx++) {
                                     const py = y * BLOCK_SIZE + by;
                                     const px = x * BLOCK_SIZE + bx;
                                     const pIdx = (py * WIDTH + px) * 4;
-                                    
-                                    frameBuffer[pIdx] = color;     
-                                    frameBuffer[pIdx + 1] = color; 
-                                    frameBuffer[pIdx + 2] = color; 
-                                    frameBuffer[pIdx + 3] = 255;   
+
+                                    frameBuffer[pIdx] = color;
+                                    frameBuffer[pIdx + 1] = color;
+                                    frameBuffer[pIdx + 2] = color;
+                                    frameBuffer[pIdx + 3] = 255;
                                 }
                             }
                         }
                     }
                     i++;
-                    
+
                     if (typeof onProgress === 'function') {
                         let percent = Math.floor((i / numFrames) * 100);
-                        
+
                         if (percent !== lastTerminalPercent && percent % 10 === 0) {
                             console.log(`[Encoder] Video rendering is ${percent}% complete...`);
                             lastTerminalPercent = percent;
@@ -162,7 +166,7 @@ export const renderFramesToVideo = (bits, outputPath, jobId, onProgress) => {
 
                     ok = ffmpeg.stdin.write(frameBuffer);
                 }
-                
+
                 if (i < numFrames) {
                     ffmpeg.stdin.once('drain', writeNext);
                 } else {
@@ -181,15 +185,15 @@ export const encode = async (chunkBuffer, email, tempDir, jobId, onProgress) => 
         console.log(`[Encoder] Starting encode for user ${email}. Chunk size: ${chunkBuffer.length} bytes`);
         const encryptedBuffer = encrypt(chunkBuffer, email);
         console.log(`[Encoder] Encryption complete.`);
-        
+
         const rsBuffer = await applyReedSolomon(encryptedBuffer);
         console.log(`[Encoder] Reed-Solomon applied.`);
 
         const bits = bufferToBits(rsBuffer);
-        
+
         const outputPath = path.join(tempDir, `${uuidv4()}.mp4`);
         console.log(`[Encoder] Rendering frames to video at ${outputPath}...`);
-        
+
         await renderFramesToVideo(bits, outputPath, jobId, onProgress);
         console.log(`[Encoder] Video rendering complete: ${outputPath}`);
 

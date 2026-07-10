@@ -15,15 +15,19 @@ try {
     console.warn("Reed-Solomon not loaded in decoder.");
 }
 
-const BLOCK_SIZE = 16;
-const WIDTH = 1280;
-const HEIGHT = 720;
+const BLOCK_SIZE = 8;
+const WIDTH = 1920;
+const HEIGHT = 1080;
 const BLOCKS_X = Math.floor(WIDTH / BLOCK_SIZE);
 const BLOCKS_Y = Math.floor(HEIGHT / BLOCK_SIZE);
 const BITS_PER_FRAME = BLOCKS_X * BLOCKS_Y;
 
 export const downloadVideo = async (videoId, youtubeEmail, tempDir, jobId) => {
     const outputPath = path.join(tempDir, `${videoId}_dl.mp4`);
+
+    if (fs.existsSync(outputPath)) {
+        try { fs.unlinkSync(outputPath); } catch (e) { }
+    }
 
     return new Promise((resolve, reject) => {
         const ytdlProcess = youtubedl.exec(`https://www.youtube.com/watch?v=${videoId}`, {
@@ -72,31 +76,39 @@ export const decodeFramesFromStream = (videoPath, jobId, onProgress) => {
         }
 
         const allBits = [];
-        let leftover = Buffer.alloc(0);
+        const chunks = [];
+        let accumulatedLength = 0;
         const rgbaSize = WIDTH * HEIGHT * 4;
 
         ffmpeg.stdout.on('data', (chunk) => {
-            let buffer = Buffer.concat([leftover, chunk]);
+            chunks.push(chunk);
+            accumulatedLength += chunk.length;
 
-            while (buffer.length >= rgbaSize) {
+            while (accumulatedLength >= rgbaSize) {
+                let buffer = Buffer.concat(chunks);
                 const frameBuffer = buffer.subarray(0, rgbaSize);
-                buffer = buffer.subarray(rgbaSize);
+                const remainder = buffer.subarray(rgbaSize);
 
-                // Decode frame
+                chunks.length = 0;
+                if (remainder.length > 0) {
+                    chunks.push(remainder);
+                    accumulatedLength = remainder.length;
+                } else {
+                    accumulatedLength = 0;
+                }
+
+                const frameData = new Uint8Array(BITS_PER_FRAME);
+                let bitIdx = 0;
                 for (let y = 0; y < BLOCKS_Y; y++) {
                     for (let x = 0; x < BLOCKS_X; x++) {
-                        // Sample center pixel of the 16x16 block
                         const center_y = y * BLOCK_SIZE + Math.floor(BLOCK_SIZE / 2);
                         const center_x = x * BLOCK_SIZE + Math.floor(BLOCK_SIZE / 2);
                         const pIdx = (center_y * WIDTH + center_x) * 4;
-
-                        const r = frameBuffer[pIdx];
-                        const bit = r > 128 ? 1 : 0;
-                        allBits.push(bit);
+                        frameData[bitIdx++] = frameBuffer[pIdx] > 128 ? 1 : 0;
                     }
                 }
+                allBits.push(frameData);
             }
-            leftover = buffer;
         });
 
         let totalDurationSec = 0;
@@ -144,7 +156,14 @@ export const decodeFramesFromStream = (videoPath, jobId, onProgress) => {
                 reject(new Error(`FFmpeg exit code ${code}`));
             } else {
                 console.log(`[Decoder] FFmpeg completed successfully`);
-                resolve(allBits);
+                const totalBits = allBits.reduce((acc, curr) => acc + curr.length, 0);
+                const finalBits = new Uint8Array(totalBits);
+                let offset = 0;
+                for (let arr of allBits) {
+                    finalBits.set(arr, offset);
+                    offset += arr.length;
+                }
+                resolve(finalBits);
             }
         });
     });

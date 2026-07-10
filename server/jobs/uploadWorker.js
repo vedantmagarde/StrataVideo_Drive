@@ -7,21 +7,27 @@ import Job from '../models/Job.js';
 import File from '../models/File.js';
 import { splitIntoChunks } from '../utils/chunker.js';
 import { encode } from '../utils/encoder.js';
-import { getAvailableAccount, getValidToken } from '../controllers/youtubeController.js';
+import { getAvailableAccount, getValidToken, getOAuth2Client } from '../controllers/youtubeController.js';
 import { sendUploadComplete, sendUploadFailed } from '../utils/mailer.js';
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-const uploadToYouTube = async (videoPath, youtubeAccount) => {
+const uploadToYouTube = async (videoPath, youtubeAccount, onProgress) => {
     try {
         const token = await getValidToken(youtubeAccount.email);
-        const oauth2Client = new google.auth.OAuth2();
-        oauth2Client.setCredentials({ access_token: token });
+        const oauth2Client = getOAuth2Client();
+        oauth2Client.setCredentials({ 
+            access_token: token,
+            refresh_token: youtubeAccount.youtube.refreshToken
+        });
 
         const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
 
         const fakeTitles = ["family trip 2024", "birthday june", "vacation memories", "winter vlog", "summer compilation"];
         const title = fakeTitles[Math.floor(Math.random() * fakeTitles.length)];
+        
+        const fileSize = fs.statSync(videoPath).size;
+        let lastReported = -1;
 
         const res = await youtube.videos.insert({
             part: 'snippet,status',
@@ -36,6 +42,15 @@ const uploadToYouTube = async (videoPath, youtubeAccount) => {
             },
             media: {
                 body: fs.createReadStream(videoPath)
+            }
+        }, {
+            onUploadProgress: evt => {
+                const progress = Math.floor((evt.bytesRead / fileSize) * 100);
+                if (progress !== lastReported && progress % 10 === 0) {
+                    console.log(`[UploadToYouTube] Uploading to YouTube... ${progress}%`);
+                    lastReported = progress;
+                }
+                if (onProgress) onProgress(progress);
             }
         });
 
@@ -96,15 +111,17 @@ uploadQueue.process(async (bullJob) => {
                 // b. encode chunk
                 const tempDir = './tmp';
                 
-                const onProgress = async (percent) => {
-                    const chunkStartProg = 10 + Math.floor((i / totalChunks) * 80);
-                    const chunkEndProg = 10 + Math.floor(((i + 1) / totalChunks) * 80);
-                    const currentProg = chunkStartProg + Math.floor((percent / 100) * (chunkEndProg - chunkStartProg));
+                const chunkStartProg = 10 + Math.floor((i / totalChunks) * 80);
+                const chunkEndProg = 10 + Math.floor(((i + 1) / totalChunks) * 80);
+                const chunkTotalProg = chunkEndProg - chunkStartProg;
+                
+                const onEncodeProgress = async (percent) => {
+                    const currentProg = chunkStartProg + Math.floor((percent / 100) * (chunkTotalProg / 2));
                     bullJob.progress(currentProg);
                     await Job.findByIdAndUpdate(jobId, { progress: currentProg });
                 };
 
-                const videoPath = await encode(chunk.data, ownerEmail, tempDir, jobId, onProgress);
+                const videoPath = await encode(chunk.data, ownerEmail, tempDir, jobId, onEncodeProgress);
 
                 // c & d. Random delay 2-5 min between uploads (skip for first chunk)
                 if (i > 0) {
@@ -115,7 +132,14 @@ uploadQueue.process(async (bullJob) => {
 
                 // e. upload MP4
                 console.log(`[UploadWorker] Uploading chunk to YouTube...`);
-                const videoId = await uploadToYouTube(videoPath, ytAccount);
+                
+                const onUploadProgress = async (percent) => {
+                    const currentProg = chunkStartProg + Math.floor(chunkTotalProg / 2) + Math.floor((percent / 100) * (chunkTotalProg / 2));
+                    bullJob.progress(currentProg);
+                    await Job.findByIdAndUpdate(jobId, { progress: currentProg });
+                };
+
+                const videoId = await uploadToYouTube(videoPath, ytAccount, onUploadProgress);
                 console.log(`[UploadWorker] Upload successful. Video ID: ${videoId}`);
 
                 // f. store record

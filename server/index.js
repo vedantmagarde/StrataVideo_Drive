@@ -12,7 +12,7 @@ import fileRoutes from "./routes/fileRoutes.js";
 import fs from "fs";
 
 const tmpDir = './tmp';
-if (!fs.existsSync(tmpDir)){
+if (!fs.existsSync(tmpDir)) {
     fs.mkdirSync(tmpDir);
 }
 
@@ -32,8 +32,8 @@ app.use(cors({
 }));
 
 const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000, 
-    max: 100, 
+    windowMs: 15 * 60 * 1000,
+    max: 2000,
     message: "Too many requests from this IP, please try again after 15 minutes"
 });
 app.use(limiter);
