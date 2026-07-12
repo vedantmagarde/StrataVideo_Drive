@@ -121,7 +121,15 @@ const DashboardPage = () => {
     };
 
     const combinedContent = [
-        ...folders.map(f => ({ ...f, itemType: 'folder', sortDate: new Date(f.updatedAt || f.createdAt).getTime(), sortName: (f.name || '').toLowerCase() })),
+        ...folders.map(f => {
+            const dateToUse = sortOption === 'oldest' ? f.createdAt : (f.updatedAt || f.createdAt);
+            return { 
+                ...f, 
+                itemType: 'folder', 
+                sortDate: new Date(dateToUse).getTime(), 
+                sortName: (f.name || '').toLowerCase() 
+            };
+        }),
         ...files.map(f => ({ ...f, itemType: 'file', sortDate: new Date(f.uploadedAt).getTime(), sortName: (f.filename || '').toLowerCase() }))
     ];
 

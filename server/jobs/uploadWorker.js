@@ -12,7 +12,7 @@ import { sendUploadComplete, sendUploadFailed } from '../utils/mailer.js';
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-const uploadToYouTube = async (videoPath, youtubeAccount, onProgress) => {
+const uploadToYouTube = async (videoPath, youtubeAccount, onProgress, titleOverride = null) => {
     try {
         const token = await getValidToken(youtubeAccount.email);
         const oauth2Client = getOAuth2Client();
@@ -24,7 +24,20 @@ const uploadToYouTube = async (videoPath, youtubeAccount, onProgress) => {
         const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
 
         const fakeTitles = ["family trip 2024", "birthday june", "vacation memories", "winter vlog", "summer compilation"];
-        const title = fakeTitles[Math.floor(Math.random() * fakeTitles.length)];
+        let title = titleOverride || fakeTitles[Math.floor(Math.random() * fakeTitles.length)];
+        
+        // Aggressive sanitization: remove all non-ASCII characters, emojis, and angle brackets
+        title = title.replace(/[^\x20-\x7E]/g, '');
+        title = title.replace(/[<>]/g, '');
+        title = title.trim();
+        
+        if (title.length > 95) {
+            title = title.substring(0, 95);
+        }
+        
+        if (!title) {
+            title = 'Streamable Backup ' + Date.now();
+        }
         
         const fileSize = fs.statSync(videoPath).size;
         let lastReported = -1;
@@ -70,7 +83,7 @@ const uploadToYouTube = async (videoPath, youtubeAccount, onProgress) => {
 };
 
 uploadQueue.process(async (bullJob) => {
-    const { fileId, jobId, ownerEmail, tempFilePath, groupId } = bullJob.data;
+    const { fileId, jobId, ownerEmail, tempFilePath, groupId, uploadMethod } = bullJob.data;
 
     try {
         await Job.findByIdAndUpdate(jobId, { status: 'processing', progress: 5 });
@@ -79,15 +92,44 @@ uploadQueue.process(async (bullJob) => {
         const fileBuffer = fs.readFileSync(tempFilePath);
         const fileType = await fileTypeFromFile(tempFilePath);
 
-        await File.findByIdAndUpdate(fileId, {
+        const fileDoc = await File.findByIdAndUpdate(fileId, {
             status: 'processing',
             mimeType: fileType ? fileType.mime : 'application/octet-stream',
             extension: fileType ? fileType.ext : 'bin',
             sizeBytes: fileBuffer.length
-        });
+        }, { new: false });
 
         bullJob.progress(10);
         await Job.findByIdAndUpdate(jobId, { progress: 10 });
+
+        // DIRECT BRANCH
+        if (uploadMethod === 'direct') {
+            console.log(`[UploadWorker] Direct streamable upload requested for fileId ${fileId}`);
+            const ytAccount = await getAvailableAccount(groupId || ownerEmail);
+            
+            const onUploadProgress = async (percent) => {
+                const currentProg = 10 + Math.floor((percent / 100) * 90);
+                bullJob.progress(currentProg);
+                await Job.findByIdAndUpdate(jobId, { progress: currentProg });
+            };
+
+            const videoId = await uploadToYouTube(tempFilePath, ytAccount, onUploadProgress, fileDoc.filename);
+            
+            ytAccount.youtube.quotaUsed += 1600;
+            await ytAccount.save();
+
+            const finalFile = await File.findByIdAndUpdate(fileId, {
+                status: 'ready',
+                youtubeVideoId: videoId,
+                chunks: []
+            }, { new: true });
+
+            await Job.findByIdAndUpdate(jobId, { status: 'ready', progress: 100 });
+            await sendUploadComplete(ownerEmail, finalFile.filename);
+            
+            if (fs.existsSync(tempFilePath)) fs.unlinkSync(tempFilePath);
+            return { success: true, fileId };
+        }
 
         // 4. Split into chunks
         const chunks = splitIntoChunks(fileBuffer);

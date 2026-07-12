@@ -45,6 +45,15 @@ const fileSchema = new mongoose.Schema({
     ref: "Folder",
     default: null
   },
+  uploadMethod: {
+    type: String,
+    enum: ['encrypted', 'direct'],
+    default: 'encrypted'
+  },
+  youtubeVideoId: {
+    type: String,
+    default: null
+  },
   chunks: [chunkSchema]
 });
 

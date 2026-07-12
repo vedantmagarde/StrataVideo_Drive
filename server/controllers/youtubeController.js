@@ -21,7 +21,7 @@ export const authRedirect = async (req, res) => {
             prompt: 'consent',
             scope: [
                 'https://www.googleapis.com/auth/youtube',
-                'https://www.googleapis.com/auth/youtube.upload', 
+                'https://www.googleapis.com/auth/youtube.upload',
                 'https://www.googleapis.com/auth/youtube.readonly'
             ],
             state
@@ -155,7 +155,7 @@ export const getAvailableAccount = async (identifier) => {
     }
 
 
-    const available = members.filter(m => m.youtube.quotaUsed < 8000);
+    const available = members.filter(m => m.youtube.quotaUsed < 800000);
 
     if (!available.length) {
         throw new Error("All connected YouTube accounts have exhausted their quota.");

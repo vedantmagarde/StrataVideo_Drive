@@ -1,0 +1,1 @@
+import 'dotenv/config'; import mongoose from 'mongoose'; import User from './models/User.js'; mongoose.connect(process.env.MONGODB_URI).then(async () => { const res = await User.updateMany({}, { $set: { 'youtube.quotaUsed': 0 } }); console.log('Reset quotas:', res); process.exit(0); }).catch(err => { console.error(err); process.exit(1); });

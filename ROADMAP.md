@@ -169,7 +169,10 @@ To ensure enterprise-grade stability and security, we have recently solidified t
 - ✅ **Global Category Filtering:** Media filters (Images, Videos, etc.) now flatten the view across all folders for easy access.
 - ✅ **Simultaneous Batch Uploads:** Upgraded the `UploadButton` to support selecting and tracking multiple files concurrently.
 - ✅ **Streaming Token Resilience:** Fixed a critical bug where `gaxios` failed to auto-refresh expired tokens during video streaming. We now "ping" the YouTube API with a lightweight request before streaming to force a secure token refresh.
-- ✅ **Global Sorting:** Implemented dynamic MongoDB sorting (A-Z, Date) accessible via a universal frontend dropdown.
+- ✅ **Global Sorting (Unified View):** Implemented dynamic MongoDB sorting (A-Z, Date) accessible via a universal frontend dropdown. Specifically modified folder logic to sort by the `updatedAt` (latest modified) timestamp and successfully interleaved folders and files on the frontend to create a perfectly seamless, chronological UI view.
+
+### 🌓 Phase 10 — Hybrid Vault
+- ✅ **Streamable Media:** Introduced bifurcated upload pipeline allowing direct, unencrypted video uploads for instant streaming, alongside the standard AES-256 encrypted chunking method.
 
 ---
 

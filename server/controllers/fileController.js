@@ -1,6 +1,7 @@
 import File from '../models/File.js';
 import Job from '../models/Job.js';
 import User from '../models/User.js';
+import Folder from '../models/Folder.js';
 import { uploadQueue, downloadQueue } from '../jobs/queues.js';
 import fs from 'fs';
 import { google } from 'googleapis';
@@ -12,6 +13,7 @@ export const uploadFile = async (req, res) => {
         const { email } = req.user;
         const file = req.file;
         const folderId = req.body.folderId || null;
+        const uploadMethod = req.body.uploadMethod || 'encrypted';
 
         if (!file) {
             return res.status(400).json({ error: "No file uploaded" });
@@ -26,10 +28,15 @@ export const uploadFile = async (req, res) => {
             filename: file.originalname,
             mimeType: file.mimetype,
             sizeBytes: file.size,
+            uploadMethod: uploadMethod,
             status: 'pending'
         });
         await newFile.save();
         console.log(`[FileController] File document created in DB: ${newFile._id}`);
+
+        if (folderId && folderId !== 'null') {
+            await Folder.findByIdAndUpdate(folderId, { updatedAt: new Date() });
+        }
 
         const job = new Job({
             type: 'upload',
@@ -45,7 +52,8 @@ export const uploadFile = async (req, res) => {
             jobId: job._id,
             ownerEmail: email,
             tempFilePath: file.path,
-            groupId: user.groupId
+            groupId: user.groupId,
+            uploadMethod: uploadMethod
         });
         console.log(`[FileController] Successfully pushed job ${job._id} to Bull uploadQueue`);
 
@@ -120,20 +128,46 @@ export const deleteFile = async (req, res) => {
             return res.status(404).json({ error: "File not found or unauthorized" });
         }
 
-        for (const chunk of file.chunks) {
+        if (file.uploadMethod === 'direct' && file.youtubeVideoId) {
             try {
-                const token = await getValidToken(chunk.youtubeAccountEmail);
-                const chunkUser = await User.findOne({ email: chunk.youtubeAccountEmail });
-                const oauth2Client = getOAuth2Client();
-                oauth2Client.setCredentials({
-                    access_token: token,
-                    refresh_token: chunkUser?.youtube?.refreshToken || ''
-                });
-
-                const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
-                await youtube.videos.delete({ id: chunk.videoId });
+                const query = file.groupId ? { groupId: file.groupId, 'youtube.connected': true } : { email: file.ownerEmail, 'youtube.connected': true };
+                const members = await User.find(query);
+                
+                for (const member of members) {
+                    try {
+                        const token = await getValidToken(member.email);
+                        const oauth2Client = getOAuth2Client();
+                        oauth2Client.setCredentials({
+                            access_token: token,
+                            refresh_token: member.youtube.refreshToken
+                        });
+                        const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
+                        await youtube.videos.delete({ id: file.youtubeVideoId });
+                        console.log(`[DeleteFile] Successfully deleted direct video ${file.youtubeVideoId} using account ${member.email}`);
+                        break; // Stop after successful deletion
+                    } catch (err) {
+                        // Might fail if video isn't on this specific member's channel; keep trying
+                    }
+                }
             } catch (err) {
-                console.error(`Failed to delete YouTube video ${chunk.videoId}:`, err.message);
+                console.error("Failed to delete direct YouTube video:", err.message);
+            }
+        } else {
+            for (const chunk of file.chunks) {
+                try {
+                    const token = await getValidToken(chunk.youtubeAccountEmail);
+                    const chunkUser = await User.findOne({ email: chunk.youtubeAccountEmail });
+                    const oauth2Client = getOAuth2Client();
+                    oauth2Client.setCredentials({
+                        access_token: token,
+                        refresh_token: chunkUser?.youtube?.refreshToken || ''
+                    });
+
+                    const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
+                    await youtube.videos.delete({ id: chunk.videoId });
+                } catch (err) {
+                    console.error(`Failed to delete YouTube video ${chunk.videoId}:`, err.message);
+                }
             }
         }
 

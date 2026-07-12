@@ -1,6 +1,17 @@
 import React from 'react';
 import { Download, Trash2, File, Image, Film, Music, FileText, Archive, Code } from 'lucide-react';
 
+const YoutubeIcon = ({ className }) => (
+    <svg 
+        xmlns="http://www.w3.org/2000/svg" 
+        viewBox="0 0 24 24" 
+        fill="currentColor" 
+        className={className}
+    >
+        <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+    </svg>
+);
+
 const formatBytes = (bytes, decimals = 2) => {
     if (!+bytes) return '0 Bytes';
     const k = 1024;
@@ -42,7 +53,20 @@ const FileCard = ({ file, onDelete, onDownload }) => {
                 <div className="p-3 bg-slate-50 rounded-lg">
                     {getIcon(file.mimeType)}
                 </div>
-                {getStatusBadge(file.status)}
+                <div className="flex gap-2 items-center">
+                    {file.uploadMethod === 'direct' && file.youtubeVideoId && (
+                        <a 
+                            href={`https://youtu.be/${file.youtubeVideoId}`} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="p-1 rounded-md text-red-500 hover:bg-red-50 transition-colors"
+                            title="Stream on YouTube"
+                        >
+                            <YoutubeIcon className="w-6 h-6" />
+                        </a>
+                    )}
+                    {getStatusBadge(file.status)}
+                </div>
             </div>
             
             <h3 className="font-semibold text-slate-900 truncate mb-1" title={file.filename}>

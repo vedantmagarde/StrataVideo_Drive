@@ -22,7 +22,7 @@ const BLOCKS_X = Math.floor(WIDTH / BLOCK_SIZE);
 const BLOCKS_Y = Math.floor(HEIGHT / BLOCK_SIZE);
 const BITS_PER_FRAME = BLOCKS_X * BLOCKS_Y;
 
-export const downloadVideo = async (videoId, youtubeEmail, tempDir, jobId) => {
+export const downloadVideo = async (videoId, youtubeEmail, tempDir, jobId, needsAudio = false) => {
     const outputPath = path.join(tempDir, `${videoId}_dl.mp4`);
 
     if (fs.existsSync(outputPath)) {
@@ -30,8 +30,9 @@ export const downloadVideo = async (videoId, youtubeEmail, tempDir, jobId) => {
     }
 
     return new Promise((resolve, reject) => {
+        const formatStr = needsAudio ? 'best[ext=mp4]/best' : 'bestvideo[ext=mp4]';
         const ytdlProcess = youtubedl.exec(`https://www.youtube.com/watch?v=${videoId}`, {
-            f: 'bestvideo[ext=mp4]',
+            f: formatStr,
             o: outputPath
         });
 
