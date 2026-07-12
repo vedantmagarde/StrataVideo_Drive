@@ -118,9 +118,15 @@ export const getValidToken = async (email) => {
         refresh_token: user.youtube.refreshToken,
     });
 
+    try {
+        const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
+        await youtube.channels.list({ part: 'id', mine: true });
+    } catch (e) {
+        console.warn(`[getValidToken] Failed to validate/refresh token for ${email}:`, e.message);
+        throw e;
+    }
 
-
-    const { token } = await oauth2Client.getAccessToken();
+    const token = oauth2Client.credentials.access_token;
 
     if (token !== user.youtube.accessToken) {
         user.youtube.accessToken = token;

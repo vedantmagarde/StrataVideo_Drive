@@ -11,6 +11,7 @@ export const uploadFile = async (req, res) => {
     try {
         const { email } = req.user;
         const file = req.file;
+        const folderId = req.body.folderId || null;
 
         if (!file) {
             return res.status(400).json({ error: "No file uploaded" });
@@ -21,6 +22,7 @@ export const uploadFile = async (req, res) => {
         const newFile = new File({
             ownerEmail: email,
             groupId: user.groupId || null,
+            folderId: folderId === 'null' ? null : folderId,
             filename: file.originalname,
             mimeType: file.mimetype,
             sizeBytes: file.size,
@@ -57,12 +59,11 @@ export const uploadFile = async (req, res) => {
 export const listFiles = async (req, res) => {
     try {
         const { email } = req.user;
-        const { type } = req.query;
+        const { type, folderId } = req.query;
 
         let query = { ownerEmail: email };
 
         if (type) {
-            // Simplified filter based on mimeType prefix
             if (type === 'image') query.mimeType = /^image\//;
             else if (type === 'video') query.mimeType = /^video\//;
             else if (type === 'audio') query.mimeType = /^audio\//;
@@ -70,6 +71,9 @@ export const listFiles = async (req, res) => {
             else if (type === 'archive') query.mimeType = /zip|rar|tar|gz|7z/;
             else if (type === 'code') query.mimeType = /json|javascript|html|css|xml|yaml/;
             else query.mimeType = { $not: /image|video|audio|pdf|msword|officedocument|text|zip|rar|tar|gz|7z|json|javascript|html|css|xml|yaml/ };
+        } else {
+            // If no type filter, use folder hierarchy
+            query.folderId = (folderId && folderId !== 'null') ? folderId : null;
         }
 
         const files = await File.find(query).sort({ uploadedAt: -1 });
@@ -111,7 +115,6 @@ export const deleteFile = async (req, res) => {
             return res.status(404).json({ error: "File not found or unauthorized" });
         }
 
-        // Delete each YouTube video
         for (const chunk of file.chunks) {
             try {
                 const token = await getValidToken(chunk.youtubeAccountEmail);
@@ -126,7 +129,6 @@ export const deleteFile = async (req, res) => {
                 await youtube.videos.delete({ id: chunk.videoId });
             } catch (err) {
                 console.error(`Failed to delete YouTube video ${chunk.videoId}:`, err.message);
-                // Continue trying to delete other chunks and the file document even if one fails
             }
         }
 
@@ -217,9 +219,6 @@ export const serveFile = async (req, res) => {
             if (err) {
                 console.error("Error serving file:", err);
             }
-            // We NO LONGER aggressively delete the file here.
-            // Browsers often send multiple requests (or abort and retry) for large downloads.
-            // The file will be safely auto-deleted by the 10-minute timeout in downloadWorker.js
         });
     } catch (error) {
         console.error("Error in serveFile:", error);

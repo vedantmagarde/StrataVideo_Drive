@@ -40,6 +40,11 @@ const fileSchema = new mongoose.Schema({
     type: Date,
     default: Date.now
   },
+  folderId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Folder",
+    default: null
+  },
   chunks: [chunkSchema]
 });
 

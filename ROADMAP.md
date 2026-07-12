@@ -162,6 +162,14 @@ To ensure enterprise-grade stability and security, we have recently solidified t
 - ✅ Upgraded Firebase Admin SDK to v14 (Modular API).
 - ✅ Re-architected OAuth client instantiation across all background workers to prevent `401` token drops.
 
+### 🗂️ Phase 9 — Advanced File System & UX Enhancements
+- ✅ **Nested Folder Structure:** Implemented MongoDB `Folder` schema and full CRUD API.
+- ✅ **Recursive Deletion:** Deleting a folder recursively scrubs all child files and subfolders, automatically triggering YouTube chunk deletions.
+- ✅ **Frontend Overhaul:** Replaced static layouts with a dynamic file explorer featuring breadcrumbs, single-click navigation, and inline folder renaming.
+- ✅ **Global Category Filtering:** Media filters (Images, Videos, etc.) now flatten the view across all folders for easy access.
+- ✅ **Simultaneous Batch Uploads:** Upgraded the `UploadButton` to support selecting and tracking multiple files concurrently.
+- ✅ **Streaming Token Resilience:** Fixed a critical bug where `gaxios` failed to auto-refresh expired tokens during video streaming. We now "ping" the YouTube API with a lightweight request before streaming to force a secure token refresh.
+
 ---
 
 *Last updated: July 2026*

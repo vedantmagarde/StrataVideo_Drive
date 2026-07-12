@@ -2,42 +2,40 @@ import React, { useRef, useState } from 'react';
 import { Upload, Loader2 } from 'lucide-react';
 import api from '../api/axios';
 
-const UploadButton = ({ onQueued }) => {
+const UploadButton = ({ onQueued, currentFolderId }) => {
     const fileInputRef = useRef(null);
     const [isUploading, setIsUploading] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
 
     const handleFileChange = async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
+        const files = Array.from(e.target.files);
+        if (files.length === 0) return;
 
         setIsUploading(true);
         setUploadProgress(0);
 
-        const formData = new FormData();
-        formData.append('file', file);
-
-        console.log("CRITICAL DEBUG: About to send upload request to:", api.defaults.baseURL);
+        const totalSize = files.reduce((acc, file) => acc + file.size, 0);
+        const loadedSizes = new Array(files.length).fill(0);
 
         try {
-            const res = await api.post('/files/upload', formData, {
-                headers: { 'Content-Type': 'multipart/form-data' },
-                onUploadProgress: (progressEvent) => {
-                    const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-                    setUploadProgress(percentCompleted);
-                }
-            });
-            if (onQueued) onQueued(res.data.jobId);
+            await Promise.all(files.map(async (file, index) => {
+                const formData = new FormData();
+                formData.append('file', file);
+                if (currentFolderId) formData.append('folderId', currentFolderId);
+
+                const res = await api.post('/files/upload', formData, {
+                    headers: { 'Content-Type': 'multipart/form-data' },
+                    onUploadProgress: (progressEvent) => {
+                        loadedSizes[index] = progressEvent.loaded;
+                        const currentTotalLoaded = loadedSizes.reduce((a, b) => a + b, 0);
+                        const percentCompleted = Math.round((currentTotalLoaded * 100) / totalSize);
+                        setUploadProgress(percentCompleted);
+                    }
+                });
+                if (onQueued) onQueued(res.data.jobId);
+            }));
         } catch (error) {
             console.error("Upload failed with error:", error);
-            console.error("Error Message:", error.message);
-            console.error("Error Response Data:", error.response?.data);
-            console.error("Error Status:", error.response?.status);
-
-            if (error.message === "Network Error") {
-                console.error("CRITICAL: The frontend cannot reach the backend server. Is the Node.js server running on port 5000?");
-            }
-
             alert("Upload failed: " + (error.response?.data?.error || error.message));
         } finally {
             setIsUploading(false);
@@ -50,6 +48,7 @@ const UploadButton = ({ onQueued }) => {
         <div>
             <input
                 type="file"
+                multiple
                 ref={fileInputRef}
                 className="hidden"
                 onChange={handleFileChange}

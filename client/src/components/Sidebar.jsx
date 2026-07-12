@@ -1,19 +1,19 @@
 import React from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, Link } from 'react-router-dom';
 import { HardDrive, Settings, Image, Film, Music, FileText, Archive, Code } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
-const Sidebar = () => {
+const Sidebar = ({ activeCategory, setActiveCategory, setCurrentFolderId }) => {
     const { currentUser } = useAuth();
     
     const navItems = [
-        { icon: <HardDrive className="w-5 h-5" />, label: 'All Files', path: '/dashboard' },
-        { icon: <Image className="w-5 h-5" />, label: 'Images', path: '/dashboard?type=image' },
-        { icon: <Film className="w-5 h-5" />, label: 'Videos', path: '/dashboard?type=video' },
-        { icon: <Music className="w-5 h-5" />, label: 'Audio', path: '/dashboard?type=audio' },
-        { icon: <FileText className="w-5 h-5" />, label: 'Documents', path: '/dashboard?type=document' },
-        { icon: <Archive className="w-5 h-5" />, label: 'Archives', path: '/dashboard?type=archive' },
-        { icon: <Code className="w-5 h-5" />, label: 'Code', path: '/dashboard?type=code' },
+        { icon: <HardDrive className="w-5 h-5" />, label: 'All Files', type: null },
+        { icon: <Image className="w-5 h-5" />, label: 'Images', type: 'image' },
+        { icon: <Film className="w-5 h-5" />, label: 'Videos', type: 'video' },
+        { icon: <Music className="w-5 h-5" />, label: 'Audio', type: 'audio' },
+        { icon: <FileText className="w-5 h-5" />, label: 'Documents', type: 'document' },
+        { icon: <Archive className="w-5 h-5" />, label: 'Archives', type: 'archive' },
+        { icon: <Code className="w-5 h-5" />, label: 'Code', type: 'code' },
     ];
 
     return (
@@ -27,19 +27,24 @@ const Sidebar = () => {
             
             <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1">
                 {navItems.map((item, idx) => (
-                    <NavLink 
+                    <button 
                         key={idx}
-                        to={item.path}
-                        className={({ isActive }) => `
-                            flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors
-                            ${isActive && !item.path.includes('?type=') || window.location.search === item.path.split('?')[1] 
+                        onClick={() => {
+                            setActiveCategory(item.type);
+                            if (item.type === null) {
+                                setCurrentFolderId(null);
+                            }
+                        }}
+                        className={`
+                            w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors
+                            ${activeCategory === item.type
                                 ? 'bg-blue-50 text-blue-600' 
                                 : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'}
                         `}
                     >
                         {item.icon}
                         {item.label}
-                    </NavLink>
+                    </button>
                 ))}
             </nav>
 

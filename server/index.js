@@ -9,6 +9,7 @@ import authRoutes from "./routes/authRoutes.js";
 import groupRoutes from "./routes/groupRoutes.js";
 import youtubeRoutes from "./routes/youtubeRoutes.js";
 import fileRoutes from "./routes/fileRoutes.js";
+import folderRoutes from "./routes/folderRoutes.js";
 import fs from "fs";
 
 const tmpDir = './tmp';
@@ -48,6 +49,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/group", groupRoutes);
 app.use("/api/youtube", youtubeRoutes);
 app.use("/api/files", fileRoutes);
+app.use("/api/folders", folderRoutes);
 
 
 app.get("/api/health", (req, res) => {
