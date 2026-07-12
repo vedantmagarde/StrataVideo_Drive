@@ -178,11 +178,18 @@ To ensure enterprise-grade stability and security, we have recently solidified t
 - ✅ **Decoding Pipeline Integrity:** Decoupled `yt-dlp` download formatting to explicitly force raw `bestvideo` on Secure Storage (preventing AES decryption corruption from compression artifacts) while dynamically injecting audio track parameters for standard Streamable Media downloads.
 - ✅ **Chronological Folder Anchoring:** Engineered an OS-level "Date Modified" algorithm. Backend automatically bumps folder `updatedAt` timestamps upon child uploads. Frontend dynamically toggles between `createdAt` (Oldest First) and `updatedAt` (Newest First) to ensure folders anchor perfectly within chronological file views.
 
-### 🔮 Phase 11 — Future Growth & Next Steps
+### 🛡️ Phase 11 — Rate Limiting, UI Polishing & Quota Management
+- ✅ **Global Rate Limiting:** Implemented request throttling (Redis-backed) across both direct and chunked uploads to prevent YouTube from flagging automated API usage.
+- ✅ **Smart Quota Failover:** Added intelligent fallback logic to detect `403 quotaExceeded` errors mid-upload, flag the account, and automatically reroute the remaining chunks to the next available account.
+- ✅ **Horizontal Footer HUD:** Overhauled UI layout to include a global `FooterBar` at the base of the screen, dynamically tracking live quota usage across all connected accounts.
+- ✅ **Dashboard Routing Architecture:** Repaired critical React-Router navigation bugs and z-index overlap issues within the Sidebar and Sort menus for a flawless UI experience.
+- ✅ **Zero-Accumulation Storage:** Enforced immediate-deletion policies in execution loops and network close events to completely avoid permanent disk storage.
+
+### 🔮 Phase 12 — Future Growth & Next Steps
 - ⬜ **Multi-Select & Bulk Actions:** Add checkboxes to the dashboard allowing users to delete, move, or download multiple files/folders at once.
 - ⬜ **Shared Folders / Group Permissions:** Enhance the Group schema to allow specific members to only view or upload to certain folders, rather than having full admin access across the Vault.
 - ⬜ **Mobile Responsiveness Polish:** Optimize the File Explorer UI, Sidebars, and Modals specifically for smaller mobile touch-screens.
-- ✅ **Automated Quota Balancing (Sharding):** Implemented a Round-Robin sharding algorithm to distribute file chunks across 2-10 connected YouTube channels, storing account relationships in MongoDB for seamless multi-account decoding and spam-filter evasion.
+- ⬜ **Automated Quota Balancing (Sharding):** Expand on Round-Robin sharding algorithm to dynamically optimize load based on real-time bandwidth capabilities of different accounts.
 
 ---
 

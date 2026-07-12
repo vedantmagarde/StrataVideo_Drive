@@ -29,7 +29,39 @@ const waitForRateLimit = async (identifier) => {
     lastUploadTimes.set(identifier.toString(), Date.now());
 };
 
-const uploadToYouTube = async (videoPath, youtubeAccount, onProgress, titleOverride = null) => {
+const generateStealthTitle = (chunkIndex = null) => {
+    const personas = ['iphone', 'android', 'vlogger', 'gopro'];
+    const persona = personas[Math.floor(Math.random() * personas.length)];
+    
+    const randomDigits = Math.floor(1000 + Math.random() * 9000);
+    const date = new Date();
+    const dateString = `${date.getFullYear()}${String(date.getMonth()+1).padStart(2, '0')}${String(date.getDate()).padStart(2, '0')}`;
+    const clipSuffix = chunkIndex !== null ? ` (Clip ${chunkIndex})` : '';
+
+    if (persona === 'iphone') {
+        return `IMG_${randomDigits}${clipSuffix}.MOV`;
+    } else if (persona === 'android') {
+        return `VID_${dateString}_${randomDigits}${clipSuffix}.mp4`;
+    } else if (persona === 'gopro') {
+        return `GOPR${randomDigits}${clipSuffix}.MP4`;
+    } else {
+        const adjectives = ["family", "summer", "winter", "weekend", "birthday", "random", "funny", "my", "our"];
+        const subjects = ["trip", "vlog", "memories", "vacation", "day out", "footage", "getaway", "hike"];
+        const locations = ["beach", "mountains", "park", "lake", "city", "roadtrip", "home"];
+        
+        const adj = adjectives[Math.floor(Math.random() * adjectives.length)];
+        const sub = subjects[Math.floor(Math.random() * subjects.length)];
+        const loc = locations[Math.floor(Math.random() * locations.length)];
+        
+        let title = `${adj} ${sub} ${loc} ${date.getFullYear()}`;
+        title = title.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+        
+        if (chunkIndex !== null) title += ` - Pt ${chunkIndex}`;
+        return title;
+    }
+};
+
+const uploadToYouTube = async (videoPath, youtubeAccount, onProgress, chunkIndex = null) => {
     try {
         const token = await getValidToken(youtubeAccount.email);
         const oauth2Client = getOAuth2Client();
@@ -40,21 +72,7 @@ const uploadToYouTube = async (videoPath, youtubeAccount, onProgress, titleOverr
 
         const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
 
-        const fakeTitles = ["family trip 2024", "birthday june", "vacation memories", "winter vlog", "summer compilation"];
-        let title = titleOverride || fakeTitles[Math.floor(Math.random() * fakeTitles.length)];
-        
-        // Aggressive sanitization: remove all non-ASCII characters, emojis, and angle brackets
-        title = title.replace(/[^\x20-\x7E]/g, '');
-        title = title.replace(/[<>]/g, '');
-        title = title.trim();
-        
-        if (title.length > 95) {
-            title = title.substring(0, 95);
-        }
-        
-        if (!title) {
-            title = 'Streamable Backup ' + Date.now();
-        }
+        const title = generateStealthTitle(chunkIndex);
         
         const fileSize = fs.statSync(videoPath).size;
         let lastReported = -1;
@@ -140,7 +158,7 @@ uploadQueue.process(async (bullJob) => {
                 const ytAccount = allAccounts[i];
                 try {
                     console.log(`[UploadWorker] Attempting direct upload to account: ${ytAccount.email}`);
-                    videoId = await uploadToYouTube(tempFilePath, ytAccount, onUploadProgress, fileDoc.filename);
+                    videoId = await uploadToYouTube(tempFilePath, ytAccount, onUploadProgress, null);
                     uploaded = true;
                     usedAccount = ytAccount;
                     break; // Success, exit retry loop
@@ -235,9 +253,14 @@ uploadQueue.process(async (bullJob) => {
                     console.log(`[UploadWorker] Attempting chunk upload to YouTube account: ${ytAccount.email}`);
                     
                     try {
-                        const videoId = await uploadToYouTube(videoPath, ytAccount, onUploadProgress);
+                        const videoId = await uploadToYouTube(videoPath, ytAccount, onUploadProgress, chunk.chunkIndex);
                         console.log(`[UploadWorker] Upload successful. Video ID: ${videoId}`);
                         uploaded = true;
+                        
+                        // h. delete temp video IMMEDIATELY
+                        if (fs.existsSync(videoPath)) {
+                            fs.unlinkSync(videoPath);
+                        }
 
                         // f. store record
                         uploadedChunksRecord.push({
@@ -262,12 +285,11 @@ uploadQueue.process(async (bullJob) => {
                 }
 
                 if (!uploaded) {
-                    fs.unlinkSync(videoPath);
+                    if (fs.existsSync(videoPath)) {
+                        fs.unlinkSync(videoPath);
+                    }
                     throw new Error("All connected accounts failed to upload this chunk. YouTube limits reached across the entire group.");
                 }
-
-                // h. delete temp video
-                fs.unlinkSync(videoPath);
 
                 const prog = 10 + Math.floor(((i + 1) / totalChunks) * 80);
                 bullJob.progress(prog);

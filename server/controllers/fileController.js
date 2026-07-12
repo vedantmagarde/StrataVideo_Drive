@@ -301,10 +301,26 @@ export const serveFile = async (req, res) => {
 
         const filename = job.fileId ? job.fileId.filename : 'download';
 
+        const cleanup = () => {
+            if (fs.existsSync(job.outputPath)) {
+                try {
+                    fs.unlinkSync(job.outputPath);
+                    console.log(`[ServeFile] Failsafe cleanup executed for: ${job.outputPath}`);
+                } catch (e) {
+                    console.error(`[ServeFile] Failed to delete file:`, e);
+                }
+            }
+        };
+
         res.download(job.outputPath, filename, (err) => {
             if (err) {
                 console.error("Error serving file:", err);
             }
+            cleanup();
+        });
+
+        res.on('close', () => {
+            cleanup();
         });
     } catch (error) {
         console.error("Error in serveFile:", error);
