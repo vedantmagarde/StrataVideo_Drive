@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import FileCard from '../components/FileCard';
 import FolderCard from '../components/FolderCard';
@@ -6,9 +7,13 @@ import UploadButton from '../components/UploadButton';
 import JobStatusPoller from '../components/JobStatusPoller';
 import ConnectionWarningModal from '../components/ConnectionWarningModal';
 import api from '../api/axios';
+import FooterBar from '../components/FooterBar';
 import { Search, ChevronRight, FolderPlus, ChevronDown, Clock, ArrowDownAZ, ArrowUpZA } from 'lucide-react';
 
 const DashboardPage = () => {
+    const location = useLocation();
+    const navigate = useNavigate();
+    
     const [files, setFiles] = useState([]);
     const [folders, setFolders] = useState([]);
     const [activeJobs, setActiveJobs] = useState([]);
@@ -20,6 +25,18 @@ const DashboardPage = () => {
     const [isSortOpen, setIsSortOpen] = useState(false);
     const [groupMembers, setGroupMembers] = useState([]);
     const [isWarningModalOpen, setIsWarningModalOpen] = useState(false);
+
+    useEffect(() => {
+        if (location.state?.category !== undefined) {
+            setActiveCategory(location.state.category);
+            if (location.state.category === null) {
+                setCurrentFolderId(null);
+                setFolderPath([{ id: null, name: 'Root' }]);
+            }
+            // Clear the state so it doesn't get stuck if they reload
+            navigate(location.pathname, { replace: true, state: {} });
+        }
+    }, [location.state, navigate, location.pathname]);
 
     const fetchMembers = async () => {
         try {
@@ -163,21 +180,22 @@ const DashboardPage = () => {
     });
 
     return (
-        <div className="flex h-screen bg-slate-50 text-slate-900">
-            <Sidebar 
-                activeCategory={activeCategory} 
-                setActiveCategory={(cat) => {
-                    setActiveCategory(cat);
-                    if (cat !== null) {
-                        setFolderPath([{ id: null, name: 'Root' }]);
-                    }
-                }} 
-                setCurrentFolderId={setCurrentFolderId} 
-                groupMembers={groupMembers}
-            />
+        <div className="flex flex-col h-screen bg-slate-50 text-slate-900 overflow-hidden">
+            <div className="flex flex-1 overflow-hidden">
+                <Sidebar 
+                    activeCategory={activeCategory} 
+                    setActiveCategory={(cat) => {
+                        setActiveCategory(cat);
+                        if (cat !== null) {
+                            setFolderPath([{ id: null, name: 'Root' }]);
+                        }
+                    }} 
+                    setCurrentFolderId={setCurrentFolderId} 
+                    groupMembers={groupMembers}
+                />
             
             <main className="flex-1 flex flex-col overflow-hidden">
-                <header className="h-16 border-b border-slate-200 flex items-center justify-between px-8 bg-white/50 backdrop-blur">
+                <header className="h-16 border-b border-slate-200 flex items-center justify-between px-8 bg-white/50 backdrop-blur relative z-20">
                     <div className="relative w-96">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                         <input 
@@ -250,7 +268,7 @@ const DashboardPage = () => {
                     </div>
                 </header>
 
-                <div className="flex-1 overflow-y-auto p-8">
+                <div className="flex-1 overflow-y-auto p-8 relative">
                     <div className="mb-6 flex items-center text-lg font-bold text-slate-800">
                         {searchQuery ? (
                             <span>Search Results</span>
@@ -278,7 +296,7 @@ const DashboardPage = () => {
                             <p className="text-slate-500">No content found here. Upload a file or create a folder!</p>
                         </div>
                     ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pb-20">
                             {combinedContent.map(item => (
                                 item.itemType === 'folder' ? (
                                     <FolderCard
@@ -299,31 +317,34 @@ const DashboardPage = () => {
                             ))}
                         </div>
                     )}
-                </div>
-
-                <div className="fixed bottom-4 right-4 flex flex-col gap-2 w-80">
-                    {activeJobs.map(jobId => (
-                        <JobStatusPoller
-                            key={jobId}
-                            jobId={jobId}
-                            onComplete={() => {
-                                handleJobComplete();
-                                setActiveJobs(prev => prev.filter(id => id !== jobId));
-                            }}
-                            onFailed={() => {
-                                setActiveJobs(prev => prev.filter(id => id !== jobId));
-                            }}
-                        />
-                    ))}
+                    
+                    <div className="fixed bottom-20 right-4 flex flex-col gap-2 w-80 z-40">
+                        {activeJobs.map(jobId => (
+                            <JobStatusPoller
+                                key={jobId}
+                                jobId={jobId}
+                                onComplete={() => {
+                                    handleJobComplete();
+                                    setActiveJobs(prev => prev.filter(id => id !== jobId));
+                                }}
+                                onFailed={() => {
+                                    setActiveJobs(prev => prev.filter(id => id !== jobId));
+                                }}
+                            />
+                        ))}
+                    </div>
                 </div>
             </main>
-
-            <ConnectionWarningModal 
-                isOpen={isWarningModalOpen} 
-                onClose={() => setIsWarningModalOpen(false)} 
-                members={groupMembers} 
-            />
         </div>
+        
+        <FooterBar groupMembers={groupMembers} />
+
+        <ConnectionWarningModal 
+            isOpen={isWarningModalOpen} 
+            onClose={() => setIsWarningModalOpen(false)} 
+            members={groupMembers} 
+        />
+    </div>
     );
 };
 

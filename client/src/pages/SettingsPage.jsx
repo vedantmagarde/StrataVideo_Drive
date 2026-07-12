@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import Sidebar from '../components/Sidebar';
+import FooterBar from '../components/FooterBar';
 import { useAuth } from '../context/AuthContext';
 import api from '../api/axios';
 import { PlaySquare, LogOut, Plus, RefreshCw } from 'lucide-react';
@@ -66,10 +67,11 @@ const SettingsPage = () => {
     const profile = currentUser.backendProfile || currentUser;
 
     return (
-        <div className="flex h-screen bg-slate-50 text-slate-900">
-            <Sidebar />
+        <div className="flex flex-col h-screen bg-slate-50 text-slate-900 overflow-hidden">
+            <div className="flex flex-1 overflow-hidden">
+                <Sidebar />
 
-            <main className="flex-1 overflow-y-auto p-8">
+                <main className="flex-1 overflow-y-auto p-8">
                 <div className="max-w-4xl mx-auto space-y-8">
 
                     <section className="bg-white rounded-xl p-6 border border-slate-200 shadow-sm">
@@ -166,7 +168,10 @@ const SettingsPage = () => {
                         </div>
                     </section>
                 </div>
-            </main>
+                </main>
+            </div>
+            
+            <FooterBar groupMembers={members} />
         </div>
     );
 };
