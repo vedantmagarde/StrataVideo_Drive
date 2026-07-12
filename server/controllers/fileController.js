@@ -59,7 +59,7 @@ export const uploadFile = async (req, res) => {
 export const listFiles = async (req, res) => {
     try {
         const { email } = req.user;
-        const { type, folderId } = req.query;
+        const { type, folderId, sort } = req.query;
 
         let query = { ownerEmail: email };
 
@@ -76,7 +76,12 @@ export const listFiles = async (req, res) => {
             query.folderId = (folderId && folderId !== 'null') ? folderId : null;
         }
 
-        const files = await File.find(query).sort({ uploadedAt: -1 });
+        let sortObj = { uploadedAt: -1 };
+        if (sort === 'oldest') sortObj = { uploadedAt: 1 };
+        else if (sort === 'name_asc') sortObj = { filename: 1 };
+        else if (sort === 'name_desc') sortObj = { filename: -1 };
+
+        const files = await File.find(query).sort(sortObj);
         res.status(200).json({ files });
     } catch (error) {
         console.error("Error in listFiles:", error);

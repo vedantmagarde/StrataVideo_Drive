@@ -169,6 +169,7 @@ To ensure enterprise-grade stability and security, we have recently solidified t
 - ✅ **Global Category Filtering:** Media filters (Images, Videos, etc.) now flatten the view across all folders for easy access.
 - ✅ **Simultaneous Batch Uploads:** Upgraded the `UploadButton` to support selecting and tracking multiple files concurrently.
 - ✅ **Streaming Token Resilience:** Fixed a critical bug where `gaxios` failed to auto-refresh expired tokens during video streaming. We now "ping" the YouTube API with a lightweight request before streaming to force a secure token refresh.
+- ✅ **Global Sorting:** Implemented dynamic MongoDB sorting (A-Z, Date) accessible via a universal frontend dropdown.
 
 ---
 

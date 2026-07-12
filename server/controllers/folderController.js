@@ -33,12 +33,17 @@ export const createFolder = async (req, res) => {
 export const getFolders = async (req, res) => {
     try {
         const { email } = req.user;
-        const { parentFolderId } = req.query;
+        const { parentFolderId, sort } = req.query;
+
+        let sortObj = { updatedAt: -1 };
+        if (sort === 'oldest') sortObj = { updatedAt: 1 };
+        else if (sort === 'name_asc') sortObj = { name: 1 };
+        else if (sort === 'name_desc') sortObj = { name: -1 };
 
         const folders = await Folder.find({
             ownerEmail: email,
             parentFolderId: parentFolderId || null
-        }).sort({ createdAt: -1 });
+        }).sort(sortObj);
 
         res.status(200).json({ folders });
     } catch (error) {

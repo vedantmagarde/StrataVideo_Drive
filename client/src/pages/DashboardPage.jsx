@@ -5,7 +5,7 @@ import FolderCard from '../components/FolderCard';
 import UploadButton from '../components/UploadButton';
 import JobStatusPoller from '../components/JobStatusPoller';
 import api from '../api/axios';
-import { Search, ChevronRight, FolderPlus } from 'lucide-react';
+import { Search, ChevronRight, FolderPlus, ChevronDown, Clock, ArrowDownAZ, ArrowUpZA } from 'lucide-react';
 
 const DashboardPage = () => {
     const [files, setFiles] = useState([]);
@@ -15,6 +15,8 @@ const DashboardPage = () => {
     const [activeCategory, setActiveCategory] = useState(null);
     const [currentFolderId, setCurrentFolderId] = useState(null);
     const [folderPath, setFolderPath] = useState([{ id: null, name: 'Root' }]);
+    const [sortOption, setSortOption] = useState('newest');
+    const [isSortOpen, setIsSortOpen] = useState(false);
 
     const fetchContent = async () => {
         try {
@@ -26,6 +28,7 @@ const DashboardPage = () => {
                 const params = new URLSearchParams();
                 if (activeCategory) params.append('type', activeCategory);
                 if (currentFolderId) params.append('folderId', currentFolderId);
+                params.append('sort', sortOption);
                 if (params.toString()) filesEndpoint += `?${params.toString()}`;
             }
             const filesRes = await api.get(filesEndpoint);
@@ -33,7 +36,7 @@ const DashboardPage = () => {
 
             // Fetch Folders
             if (!searchQuery && !activeCategory) {
-                const foldersEndpoint = currentFolderId ? `/folders?parentFolderId=${currentFolderId}` : '/folders';
+                const foldersEndpoint = currentFolderId ? `/folders?parentFolderId=${currentFolderId}&sort=${sortOption}` : `/folders?sort=${sortOption}`;
                 const foldersRes = await api.get(foldersEndpoint);
                 setFolders(foldersRes.data.folders);
             } else {
@@ -46,7 +49,7 @@ const DashboardPage = () => {
 
     useEffect(() => {
         fetchContent();
-    }, [searchQuery, activeCategory, currentFolderId]);
+    }, [searchQuery, activeCategory, currentFolderId, sortOption]);
 
     const handleUploadQueued = (jobId) => {
         setActiveJobs(prev => [...prev, jobId]);
@@ -117,6 +120,19 @@ const DashboardPage = () => {
         setCurrentFolderId(newPath[newPath.length - 1].id);
     };
 
+    const combinedContent = [
+        ...folders.map(f => ({ ...f, itemType: 'folder', sortDate: new Date(f.updatedAt || f.createdAt).getTime(), sortName: (f.name || '').toLowerCase() })),
+        ...files.map(f => ({ ...f, itemType: 'file', sortDate: new Date(f.uploadedAt).getTime(), sortName: (f.filename || '').toLowerCase() }))
+    ];
+
+    combinedContent.sort((a, b) => {
+        if (sortOption === 'newest') return b.sortDate - a.sortDate;
+        if (sortOption === 'oldest') return a.sortDate - b.sortDate;
+        if (sortOption === 'name_asc') return a.sortName.localeCompare(b.sortName);
+        if (sortOption === 'name_desc') return b.sortName.localeCompare(a.sortName);
+        return 0;
+    });
+
     return (
         <div className="flex h-screen bg-slate-50 text-slate-900">
             <Sidebar 
@@ -143,6 +159,54 @@ const DashboardPage = () => {
                         />
                     </div>
                     <div className="flex gap-4 items-center">
+                        <div className="relative">
+                            <button 
+                                onClick={() => setIsSortOpen(!isSortOpen)}
+                                className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg font-medium transition-colors shadow-sm"
+                            >
+                                {sortOption === 'newest' && <Clock className="w-4 h-4" />}
+                                {sortOption === 'oldest' && <Clock className="w-4 h-4" />}
+                                {sortOption === 'name_asc' && <ArrowDownAZ className="w-4 h-4" />}
+                                {sortOption === 'name_desc' && <ArrowUpZA className="w-4 h-4" />}
+                                
+                                {sortOption === 'newest' && 'Newest First'}
+                                {sortOption === 'oldest' && 'Oldest First'}
+                                {sortOption === 'name_asc' && 'Name (A-Z)'}
+                                {sortOption === 'name_desc' && 'Name (Z-A)'}
+                                
+                                <ChevronDown className="w-4 h-4 ml-1 text-slate-400" />
+                            </button>
+                            
+                            {isSortOpen && (
+                                <div className="absolute right-0 top-full mt-2 w-48 bg-white border border-slate-200 rounded-lg shadow-xl overflow-hidden z-50">
+                                    <button 
+                                        onClick={() => { setSortOption('newest'); setIsSortOpen(false); }}
+                                        className={`w-full text-left px-4 py-3 flex items-center gap-3 text-sm transition-colors ${sortOption === 'newest' ? 'bg-blue-50 text-blue-700' : 'hover:bg-slate-50 text-slate-700'}`}
+                                    >
+                                        <Clock className="w-4 h-4" /> Newest First
+                                    </button>
+                                    <button 
+                                        onClick={() => { setSortOption('oldest'); setIsSortOpen(false); }}
+                                        className={`w-full text-left px-4 py-3 flex items-center gap-3 text-sm transition-colors ${sortOption === 'oldest' ? 'bg-blue-50 text-blue-700' : 'hover:bg-slate-50 text-slate-700'}`}
+                                    >
+                                        <Clock className="w-4 h-4" /> Oldest First
+                                    </button>
+                                    <button 
+                                        onClick={() => { setSortOption('name_asc'); setIsSortOpen(false); }}
+                                        className={`w-full text-left px-4 py-3 flex items-center gap-3 text-sm transition-colors ${sortOption === 'name_asc' ? 'bg-blue-50 text-blue-700' : 'hover:bg-slate-50 text-slate-700'}`}
+                                    >
+                                        <ArrowDownAZ className="w-4 h-4" /> Name (A-Z)
+                                    </button>
+                                    <button 
+                                        onClick={() => { setSortOption('name_desc'); setIsSortOpen(false); }}
+                                        className={`w-full text-left px-4 py-3 flex items-center gap-3 text-sm transition-colors ${sortOption === 'name_desc' ? 'bg-blue-50 text-blue-700' : 'hover:bg-slate-50 text-slate-700'}`}
+                                    >
+                                        <ArrowUpZA className="w-4 h-4" /> Name (Z-A)
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+
                         {!searchQuery && !activeCategory && (
                             <button 
                                 onClick={handleCreateFolder}
@@ -185,22 +249,23 @@ const DashboardPage = () => {
                         </div>
                     ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                            {folders.map(folder => (
-                                <FolderCard
-                                    key={folder._id}
-                                    folder={folder}
-                                    onClick={() => navigateToFolder(folder._id, folder.name)}
-                                    onDelete={() => handleFolderDelete(folder._id)}
-                                    onRename={(newName) => handleFolderRename(folder._id, newName)}
-                                />
-                            ))}
-                            {files.map(file => (
-                                <FileCard
-                                    key={file._id}
-                                    file={file}
-                                    onDelete={() => handleFileDelete(file._id)}
-                                    onDownload={() => handleFileDownload(file._id)}
-                                />
+                            {combinedContent.map(item => (
+                                item.itemType === 'folder' ? (
+                                    <FolderCard
+                                        key={`folder-${item._id}`}
+                                        folder={item}
+                                        onClick={() => navigateToFolder(item._id, item.name)}
+                                        onDelete={() => handleFolderDelete(item._id)}
+                                        onRename={(newName) => handleFolderRename(item._id, newName)}
+                                    />
+                                ) : (
+                                    <FileCard
+                                        key={`file-${item._id}`}
+                                        file={item}
+                                        onDelete={() => handleFileDelete(item._id)}
+                                        onDownload={() => handleFileDownload(item._id)}
+                                    />
+                                )
                             ))}
                         </div>
                     )}
