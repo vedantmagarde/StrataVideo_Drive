@@ -63,7 +63,8 @@ downloadQueue.process(async (bullJob) => {
                         await Job.findByIdAndUpdate(jobId, { progress: currentProg });
                     };
 
-                    const chunkBuf = await decode(chunk.videoId, chunk.youtubeAccountEmail, ownerEmail, tempDir, jobId, onProgress);
+                    const accountIdentifier = chunk.accountId ? chunk.accountId.toString() : chunk.youtubeAccountEmail;
+                    const chunkBuf = await decode(chunk.videoId, accountIdentifier, ownerEmail, tempDir, jobId, onProgress);
                     console.log(`[DownloadWorker] Successfully decoded chunk ${i + 1}/${totalChunks}`);
 
                     // b. collect chunk buffer

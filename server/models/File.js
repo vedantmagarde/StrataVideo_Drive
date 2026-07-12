@@ -12,6 +12,10 @@ const chunkSchema = new mongoose.Schema({
   youtubeAccountEmail: {
     type: String,
     required: true
+  },
+  accountId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
   }
 });
 

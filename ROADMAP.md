@@ -171,9 +171,20 @@ To ensure enterprise-grade stability and security, we have recently solidified t
 - ✅ **Streaming Token Resilience:** Fixed a critical bug where `gaxios` failed to auto-refresh expired tokens during video streaming. We now "ping" the YouTube API with a lightweight request before streaming to force a secure token refresh.
 - ✅ **Global Sorting (Unified View):** Implemented dynamic MongoDB sorting (A-Z, Date) accessible via a universal frontend dropdown. Specifically modified folder logic to sort by the `updatedAt` (latest modified) timestamp and successfully interleaved folders and files on the frontend to create a perfectly seamless, chronological UI view.
 
-### 🌓 Phase 10 — Hybrid Vault
+### 🌓 Phase 10 — Hybrid Vault & Architecture Perfection
 - ✅ **Streamable Media:** Introduced bifurcated upload pipeline allowing direct, unencrypted video uploads for instant streaming, alongside the standard AES-256 encrypted chunking method.
+- ✅ **Upload API Sanitization:** Engineered an aggressive regex filter to safely strip mojibake, emojis, and invalid Unicode from file titles before sending to YouTube API, completely preventing `invalidTitle` crashes.
+- ✅ **Orphaned Video Deletion:** Rewrote deletion endpoints to dynamically instantiate OAuth2 clients and issue Google API DELETE requests directly against Streamable Media videos, keeping YouTube perfectly synchronized with MongoDB.
+- ✅ **Decoding Pipeline Integrity:** Decoupled `yt-dlp` download formatting to explicitly force raw `bestvideo` on Secure Storage (preventing AES decryption corruption from compression artifacts) while dynamically injecting audio track parameters for standard Streamable Media downloads.
+- ✅ **Chronological Folder Anchoring:** Engineered an OS-level "Date Modified" algorithm. Backend automatically bumps folder `updatedAt` timestamps upon child uploads. Frontend dynamically toggles between `createdAt` (Oldest First) and `updatedAt` (Newest First) to ensure folders anchor perfectly within chronological file views.
+
+### 🔮 Phase 11 — Future Growth & Next Steps
+- ⬜ **Multi-Select & Bulk Actions:** Add checkboxes to the dashboard allowing users to delete, move, or download multiple files/folders at once.
+- ⬜ **Shared Folders / Group Permissions:** Enhance the Group schema to allow specific members to only view or upload to certain folders, rather than having full admin access across the Vault.
+- ⬜ **Mobile Responsiveness Polish:** Optimize the File Explorer UI, Sidebars, and Modals specifically for smaller mobile touch-screens.
+- ✅ **Automated Quota Balancing (Sharding):** Implemented a Round-Robin sharding algorithm to distribute file chunks across 2-10 connected YouTube channels, storing account relationships in MongoDB for seamless multi-account decoding and spam-filter evasion.
 
 ---
 
 *Last updated: July 2026*
+    

@@ -2,7 +2,7 @@ import { spawn, exec } from 'child_process';
 import path from 'path';
 import fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
-import { getValidToken } from '../controllers/youtubeController.js';
+import { getValidToken, getValidTokenById } from '../controllers/youtubeController.js';
 import { decrypt } from './encryption.js';
 import ffmpegPath from 'ffmpeg-static';
 import youtubedl from 'youtube-dl-exec';
@@ -22,44 +22,53 @@ const BLOCKS_X = Math.floor(WIDTH / BLOCK_SIZE);
 const BLOCKS_Y = Math.floor(HEIGHT / BLOCK_SIZE);
 const BITS_PER_FRAME = BLOCKS_X * BLOCKS_Y;
 
-export const downloadVideo = async (videoId, youtubeEmail, tempDir, jobId, needsAudio = false) => {
+export const downloadVideo = async (videoId, accountId, tempDir, jobId, needsAudio = false) => {
     const outputPath = path.join(tempDir, `${videoId}_dl.mp4`);
 
     if (fs.existsSync(outputPath)) {
         try { fs.unlinkSync(outputPath); } catch (e) { }
     }
 
-    return new Promise((resolve, reject) => {
-        const formatStr = needsAudio ? 'best[ext=mp4]/best' : 'bestvideo[ext=mp4]';
-        const ytdlProcess = youtubedl.exec(`https://www.youtube.com/watch?v=${videoId}`, {
-            f: formatStr,
-            o: outputPath
-        });
+    return new Promise(async (resolve, reject) => {
+        try {
+            const formatStr = needsAudio ? 'best[ext=mp4]/best' : 'bestvideo[ext=mp4]';
+            const ytDlpOptions = {
+                f: formatStr,
+                o: outputPath
+            };
 
-        ytdlProcess.catch(() => {
-            // execa/tinyspawn returns a Promise that rejects on non-zero exit.
-            // We ignore it here because we handle the 'close' event manually below.
-        });
+            // Removed OAuth Token injection because yt-dlp fails with 401 Unauthorized when passing a Bearer token to YouTube web endpoints.
+            // Since all videos are uploaded as 'unlisted', they are publicly accessible via the video ID and do not require authentication to download.
 
-        if (jobId) {
-            activeJobs.set(jobId, ytdlProcess);
-        }
+            const ytdlProcess = youtubedl.exec(`https://www.youtube.com/watch?v=${videoId}`, ytDlpOptions);
 
-        ytdlProcess.on('close', (code) => {
-            if (jobId) activeJobs.delete(jobId);
-            if (code !== 0) {
-                console.error("yt-dlp error, exit code:", code);
-                reject(new Error("yt-dlp failed"));
-            } else {
-                resolve(outputPath);
+            ytdlProcess.catch(() => {
+                // execa/tinyspawn returns a Promise that rejects on non-zero exit.
+                // We ignore it here because we handle the 'close' event manually below.
+            });
+
+            if (jobId) {
+                activeJobs.set(jobId, ytdlProcess);
             }
-        });
 
-        ytdlProcess.on('error', (err) => {
-            if (jobId) activeJobs.delete(jobId);
-            console.error("yt-dlp execution error:", err);
+            ytdlProcess.on('close', (code) => {
+                if (jobId) activeJobs.delete(jobId);
+                if (code !== 0) {
+                    console.error("yt-dlp error, exit code:", code);
+                    reject(new Error("yt-dlp failed"));
+                } else {
+                    resolve(outputPath);
+                }
+            });
+
+            ytdlProcess.on('error', (err) => {
+                if (jobId) activeJobs.delete(jobId);
+                console.error("yt-dlp execution error:", err);
+                reject(err);
+            });
+        } catch (err) {
             reject(err);
-        });
+        }
     });
 };
 
@@ -218,13 +227,13 @@ export const removeReedSolomon = (buffer) => {
     });
 };
 
-export const decode = async (videoId, youtubeEmail, ownerEmail, tempDir, jobId, onProgress) => {
+export const decode = async (videoId, accountId, ownerEmail, tempDir, jobId, onProgress) => {
     try {
         console.log(`[Decoder] Starting decode for video ${videoId}...`);
 
         // 1. download video
         console.log(`[Decoder] Downloading video from YouTube...`);
-        const videoPath = await downloadVideo(videoId, youtubeEmail, tempDir, jobId);
+        const videoPath = await downloadVideo(videoId, accountId, tempDir, jobId);
         console.log(`[Decoder] Download complete: ${videoPath}`);
 
         // 2. & 3. extract frames & convert frames to buffer via streaming

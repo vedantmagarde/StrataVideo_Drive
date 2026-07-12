@@ -7,10 +7,27 @@ import Job from '../models/Job.js';
 import File from '../models/File.js';
 import { splitIntoChunks } from '../utils/chunker.js';
 import { encode } from '../utils/encoder.js';
-import { getAvailableAccount, getValidToken, getOAuth2Client } from '../controllers/youtubeController.js';
+import { getAvailableAccount, getAllAvailableAccounts, getValidToken, getOAuth2Client } from '../controllers/youtubeController.js';
 import { sendUploadComplete, sendUploadFailed } from '../utils/mailer.js';
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+const lastUploadTimes = new Map();
+
+const waitForRateLimit = async (identifier) => {
+    const now = Date.now();
+    const lastUpload = lastUploadTimes.get(identifier.toString()) || 0;
+    const timeSinceLast = now - lastUpload;
+    const minDelay = 120000; // 2 minutes
+
+    if (lastUpload !== 0 && timeSinceLast < minDelay) {
+        const delayNeeded = minDelay - timeSinceLast + Math.floor(Math.random() * 60000);
+        console.log(`[UploadWorker] Global Rate Limiter: Delaying upload for ${delayNeeded}ms to avoid spam filters...`);
+        await sleep(delayNeeded);
+    }
+    
+    lastUploadTimes.set(identifier.toString(), Date.now());
+};
 
 const uploadToYouTube = async (videoPath, youtubeAccount, onProgress, titleOverride = null) => {
     try {
@@ -105,7 +122,7 @@ uploadQueue.process(async (bullJob) => {
         // DIRECT BRANCH
         if (uploadMethod === 'direct') {
             console.log(`[UploadWorker] Direct streamable upload requested for fileId ${fileId}`);
-            const ytAccount = await getAvailableAccount(groupId || ownerEmail);
+            const allAccounts = await getAllAvailableAccounts(groupId || ownerEmail);
             
             const onUploadProgress = async (percent) => {
                 const currentProg = 10 + Math.floor((percent / 100) * 90);
@@ -113,10 +130,36 @@ uploadQueue.process(async (bullJob) => {
                 await Job.findByIdAndUpdate(jobId, { progress: currentProg });
             };
 
-            const videoId = await uploadToYouTube(tempFilePath, ytAccount, onUploadProgress, fileDoc.filename);
+            let uploaded = false;
+            let videoId;
+            let usedAccount;
+
+            await waitForRateLimit(groupId || ownerEmail);
+
+            for (let i = 0; i < allAccounts.length; i++) {
+                const ytAccount = allAccounts[i];
+                try {
+                    console.log(`[UploadWorker] Attempting direct upload to account: ${ytAccount.email}`);
+                    videoId = await uploadToYouTube(tempFilePath, ytAccount, onUploadProgress, fileDoc.filename);
+                    uploaded = true;
+                    usedAccount = ytAccount;
+                    break; // Success, exit retry loop
+                } catch (err) {
+                    console.error(`[UploadWorker] Direct upload to ${ytAccount.email} failed. Trying next account if available...`);
+                    if (err.message && err.message.includes('exceeded')) {
+                        console.log(`[UploadWorker] Flagging account ${ytAccount.email} as uploadLimitReached.`);
+                        ytAccount.youtube.uploadLimitReached = true;
+                        await ytAccount.save();
+                    }
+                }
+            }
+
+            if (!uploaded) {
+                throw new Error("All connected accounts failed to upload. YouTube limits reached across the entire group.");
+            }
             
-            ytAccount.youtube.quotaUsed += 1600;
-            await ytAccount.save();
+            usedAccount.youtube.quotaUsed += 1600;
+            await usedAccount.save();
 
             const finalFile = await File.findByIdAndUpdate(fileId, {
                 status: 'ready',
@@ -136,6 +179,10 @@ uploadQueue.process(async (bullJob) => {
         const totalChunks = chunks.length;
         const uploadedChunksRecord = [];
 
+        // Fetch all connected accounts for Round-Robin sharding
+        const connectedAccounts = await getAllAvailableAccounts(groupId || ownerEmail);
+        console.log(`[UploadWorker] Found ${connectedAccounts.length} accounts for sharding.`);
+
         for (let i = 0; i < totalChunks; i++) {
             const chunk = chunks[i];
 
@@ -146,9 +193,6 @@ uploadQueue.process(async (bullJob) => {
                 }
 
                 console.log(`[UploadWorker] Processing chunk ${i + 1}/${totalChunks} for fileId ${fileId}...`);
-                // a. get available account
-                const ytAccount = await getAvailableAccount(groupId || ownerEmail); // fallback to owner if no group
-                console.log(`[UploadWorker] Selected YouTube account: ${ytAccount.email}`);
 
                 // b. encode chunk
                 const tempDir = './tmp';
@@ -165,15 +209,12 @@ uploadQueue.process(async (bullJob) => {
 
                 const videoPath = await encode(chunk.data, ownerEmail, tempDir, jobId, onEncodeProgress);
 
-                // c & d. Random delay 2-5 min between uploads (skip for first chunk)
-                if (i > 0) {
-                    const delayMs = Math.floor(Math.random() * (300000 - 120000 + 1) + 120000);
-                    console.log(`[UploadWorker] Delaying upload for ${delayMs}ms to avoid rate limits...`);
-                    await sleep(delayMs);
-                }
+                // c & d. Wait for global rate limit before uploading
+                await waitForRateLimit(groupId || ownerEmail);
 
-                // e. upload MP4
-                console.log(`[UploadWorker] Uploading chunk to YouTube...`);
+                // e. upload MP4 with FAILOVER
+                let uploaded = false;
+                let attempts = 0;
                 
                 const onUploadProgress = async (percent) => {
                     const currentProg = chunkStartProg + Math.floor(chunkTotalProg / 2) + Math.floor((percent / 100) * (chunkTotalProg / 2));
@@ -181,19 +222,49 @@ uploadQueue.process(async (bullJob) => {
                     await Job.findByIdAndUpdate(jobId, { progress: currentProg });
                 };
 
-                const videoId = await uploadToYouTube(videoPath, ytAccount, onUploadProgress);
-                console.log(`[UploadWorker] Upload successful. Video ID: ${videoId}`);
+                while (!uploaded && attempts < connectedAccounts.length) {
+                    const accountIndex = (i + attempts) % connectedAccounts.length;
+                    const ytAccount = connectedAccounts[accountIndex];
+                    
+                    if (ytAccount.youtube.uploadLimitReached) {
+                        console.log(`[UploadWorker] Skipping account ${ytAccount.email} as it was flagged earlier in this job.`);
+                        attempts++;
+                        continue;
+                    }
 
-                // f. store record
-                uploadedChunksRecord.push({
-                    chunkIndex: chunk.chunkIndex,
-                    videoId,
-                    youtubeAccountEmail: ytAccount.email
-                });
+                    console.log(`[UploadWorker] Attempting chunk upload to YouTube account: ${ytAccount.email}`);
+                    
+                    try {
+                        const videoId = await uploadToYouTube(videoPath, ytAccount, onUploadProgress);
+                        console.log(`[UploadWorker] Upload successful. Video ID: ${videoId}`);
+                        uploaded = true;
 
-                // g. increment quota
-                ytAccount.youtube.quotaUsed += 1600;
-                await ytAccount.save();
+                        // f. store record
+                        uploadedChunksRecord.push({
+                            chunkIndex: chunk.chunkIndex,
+                            videoId,
+                            youtubeAccountEmail: ytAccount.email,
+                            accountId: ytAccount._id
+                        });
+
+                        // g. increment quota
+                        ytAccount.youtube.quotaUsed += 1600;
+                        await ytAccount.save();
+                    } catch (err) {
+                        console.error(`[UploadWorker] Chunk upload failed on ${ytAccount.email}. Trying next account...`);
+                        if (err.message && err.message.includes('exceeded')) {
+                            console.log(`[UploadWorker] Flagging account ${ytAccount.email} as uploadLimitReached.`);
+                            ytAccount.youtube.uploadLimitReached = true;
+                            await ytAccount.save();
+                        }
+                        attempts++;
+                    }
+                }
+
+                if (!uploaded) {
+                    fs.unlinkSync(videoPath);
+                    throw new Error("All connected accounts failed to upload this chunk. YouTube limits reached across the entire group.");
+                }
 
                 // h. delete temp video
                 fs.unlinkSync(videoPath);

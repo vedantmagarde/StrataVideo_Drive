@@ -70,7 +70,8 @@ export const oauthCallback = async (req, res) => {
             channelId: channel?.id,
             channelName: channel?.snippet?.title || 'Unknown Channel',
             quotaUsed: 0,
-            quotaResetAt: new Date(new Date().setHours(24, 0, 0, 0))
+            quotaResetAt: new Date(new Date().setHours(24, 0, 0, 0)),
+            uploadLimitReached: false
         };
         await user.save();
 
@@ -94,7 +95,8 @@ export const disconnect = async (req, res) => {
             channelId: null,
             channelName: null,
             quotaUsed: 0,
-            quotaResetAt: null
+            quotaResetAt: null,
+            uploadLimitReached: false
         };
         await user.save();
 
@@ -140,9 +142,9 @@ export const getValidToken = async (email) => {
 export const getAvailableAccount = async (identifier) => {
     // Identifier can be a groupId or an email address (ownerEmail fallback)
     let query = {};
-    if (identifier && identifier.includes('@')) {
+    if (identifier && identifier.toString().includes('@')) {
         // It's an email address
-        query = { email: identifier, 'youtube.connected': true };
+        query = { email: identifier.toString(), 'youtube.connected': true };
     } else {
         // It's a groupId
         query = { groupId: identifier, 'youtube.connected': true };
@@ -154,15 +156,92 @@ export const getAvailableAccount = async (identifier) => {
         throw new Error("No connected YouTube accounts found. Please connect your YouTube account in the dashboard first.");
     }
 
+    // Reset flags if quotaResetAt is in the past
+    const now = new Date();
+    for (const m of members) {
+        if (m.youtube.quotaResetAt && m.youtube.quotaResetAt < now) {
+            m.youtube.quotaUsed = 0;
+            m.youtube.uploadLimitReached = false;
+            m.youtube.quotaResetAt = new Date(new Date().setHours(24, 0, 0, 0));
+            await m.save();
+        }
+    }
 
-    const available = members.filter(m => m.youtube.quotaUsed < 800000);
+    const available = members.filter(m => m.youtube.quotaUsed < 800000 && !m.youtube.uploadLimitReached);
 
     if (!available.length) {
-        throw new Error("All connected YouTube accounts have exhausted their quota.");
+        throw new Error("All connected YouTube accounts have exhausted their quota or daily upload limits.");
     }
 
 
     available.sort((a, b) => a.youtube.quotaUsed - b.youtube.quotaUsed);
 
     return available[0];
+};
+
+export const getAllAvailableAccounts = async (identifier) => {
+    let query = {};
+    if (identifier && identifier.toString().includes('@')) {
+        query = { email: identifier.toString(), 'youtube.connected': true };
+    } else {
+        query = { groupId: identifier, 'youtube.connected': true };
+    }
+
+    const members = await User.find(query);
+
+    if (!members.length) {
+        throw new Error("No connected YouTube accounts found. Please connect your YouTube account in the dashboard first.");
+    }
+
+    // Reset flags if quotaResetAt is in the past
+    const now = new Date();
+    for (const m of members) {
+        if (m.youtube.quotaResetAt && m.youtube.quotaResetAt < now) {
+            m.youtube.quotaUsed = 0;
+            m.youtube.uploadLimitReached = false;
+            m.youtube.quotaResetAt = new Date(new Date().setHours(24, 0, 0, 0));
+            await m.save();
+        }
+    }
+
+    const available = members.filter(m => m.youtube.quotaUsed < 800000 && !m.youtube.uploadLimitReached);
+
+    if (!available.length) {
+        throw new Error("All connected YouTube accounts have exhausted their quota or daily upload limits.");
+    }
+
+    // Sort by quota used, so round-robin starts with the lowest quota
+    available.sort((a, b) => a.youtube.quotaUsed - b.youtube.quotaUsed);
+
+    return available;
+};
+
+export const getValidTokenById = async (accountId) => {
+    const user = await User.findById(accountId);
+    if (!user || !user.youtube.connected) {
+        throw new Error(`YouTube not connected for user ID ${accountId}`);
+    }
+
+    const oauth2Client = getOAuth2Client();
+    oauth2Client.setCredentials({
+        access_token: user.youtube.accessToken,
+        refresh_token: user.youtube.refreshToken,
+    });
+
+    try {
+        const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
+        await youtube.channels.list({ part: 'id', mine: true });
+    } catch (e) {
+        console.warn(`[getValidTokenById] Failed to validate/refresh token for ${accountId}:`, e.message);
+        throw e;
+    }
+
+    const token = oauth2Client.credentials.access_token;
+
+    if (token !== user.youtube.accessToken) {
+        user.youtube.accessToken = token;
+        await user.save();
+    }
+
+    return token;
 };

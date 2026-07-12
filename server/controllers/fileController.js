@@ -5,7 +5,7 @@ import Folder from '../models/Folder.js';
 import { uploadQueue, downloadQueue } from '../jobs/queues.js';
 import fs from 'fs';
 import { google } from 'googleapis';
-import { getValidToken, getOAuth2Client } from '../controllers/youtubeController.js';
+import { getValidToken, getValidTokenById, getOAuth2Client, getAllAvailableAccounts } from '../controllers/youtubeController.js';
 import { activeJobs } from '../utils/activeJobs.js';
 
 export const uploadFile = async (req, res) => {
@@ -20,6 +20,18 @@ export const uploadFile = async (req, res) => {
         }
 
         const user = await User.findOne({ email });
+
+        try {
+            const accounts = await getAllAvailableAccounts(user.groupId || email);
+            if (accounts.length < 2) {
+                return res.status(400).json({ error: "Automated Quota Balancing requires a minimum of 2 connected YouTube accounts. Please connect another account in the dashboard." });
+            }
+            if (accounts.length > 10) {
+                return res.status(400).json({ error: "Maximum of 10 YouTube accounts supported for sharding." });
+            }
+        } catch (accErr) {
+            return res.status(400).json({ error: accErr.message });
+        }
 
         const newFile = new File({
             ownerEmail: email,
@@ -69,7 +81,10 @@ export const listFiles = async (req, res) => {
         const { email } = req.user;
         const { type, folderId, sort } = req.query;
 
-        let query = { ownerEmail: email };
+        const user = await User.findOne({ email });
+        let query = user.groupId 
+            ? { groupId: user.groupId } 
+            : { ownerEmail: email };
 
         if (type) {
             if (type === 'image') query.mimeType = /^image\//;
@@ -106,10 +121,12 @@ export const searchFiles = async (req, res) => {
             return res.status(200).json({ files: [] });
         }
 
-        const files = await File.find({
-            ownerEmail: email,
-            filename: { $regex: q, $options: 'i' }
-        }).sort({ uploadedAt: -1 });
+        const user = await User.findOne({ email });
+        let query = user.groupId 
+            ? { groupId: user.groupId, filename: { $regex: q, $options: 'i' } } 
+            : { ownerEmail: email, filename: { $regex: q, $options: 'i' } };
+
+        const files = await File.find(query).sort({ uploadedAt: -1 });
 
         res.status(200).json({ files });
     } catch (error) {
@@ -123,7 +140,12 @@ export const deleteFile = async (req, res) => {
         const { email } = req.user;
         const { fileId } = req.params;
 
-        const file = await File.findOne({ _id: fileId, ownerEmail: email });
+        const user = await User.findOne({ email });
+        let query = user.groupId 
+            ? { _id: fileId, groupId: user.groupId } 
+            : { _id: fileId, ownerEmail: email };
+
+        const file = await File.findOne(query);
         if (!file) {
             return res.status(404).json({ error: "File not found or unauthorized" });
         }
@@ -153,20 +175,40 @@ export const deleteFile = async (req, res) => {
                 console.error("Failed to delete direct YouTube video:", err.message);
             }
         } else {
+            // Group chunks by account identifier (accountId or email)
+            const groupedChunks = {};
             for (const chunk of file.chunks) {
-                try {
-                    const token = await getValidToken(chunk.youtubeAccountEmail);
-                    const chunkUser = await User.findOne({ email: chunk.youtubeAccountEmail });
-                    const oauth2Client = getOAuth2Client();
-                    oauth2Client.setCredentials({
-                        access_token: token,
-                        refresh_token: chunkUser?.youtube?.refreshToken || ''
-                    });
+                const identifier = chunk.accountId ? chunk.accountId.toString() : chunk.youtubeAccountEmail;
+                if (!groupedChunks[identifier]) groupedChunks[identifier] = [];
+                groupedChunks[identifier].push(chunk.videoId);
+            }
 
+            for (const identifier of Object.keys(groupedChunks)) {
+                try {
+                    let token, refreshToken;
+                    if (identifier.includes('@')) {
+                        token = await getValidToken(identifier);
+                        const chunkUser = await User.findOne({ email: identifier });
+                        refreshToken = chunkUser?.youtube?.refreshToken || '';
+                    } else {
+                        token = await getValidTokenById(identifier);
+                        const chunkUser = await User.findById(identifier);
+                        refreshToken = chunkUser?.youtube?.refreshToken || '';
+                    }
+                    
+                    const oauth2Client = getOAuth2Client();
+                    oauth2Client.setCredentials({ access_token: token, refresh_token: refreshToken });
                     const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
-                    await youtube.videos.delete({ id: chunk.videoId });
+                    
+                    for (const videoId of groupedChunks[identifier]) {
+                        try {
+                            await youtube.videos.delete({ id: videoId });
+                        } catch (err) {
+                            console.error(`Failed to delete YouTube chunk ${videoId}:`, err.message);
+                        }
+                    }
                 } catch (err) {
-                    console.error(`Failed to delete YouTube video ${chunk.videoId}:`, err.message);
+                    console.error(`Failed to authenticate YouTube client for account ${identifier}:`, err.message);
                 }
             }
         }
@@ -185,7 +227,12 @@ export const downloadFile = async (req, res) => {
         const { email } = req.user;
         const { fileId } = req.params;
 
-        const file = await File.findOne({ _id: fileId, ownerEmail: email });
+        const user = await User.findOne({ email });
+        let query = user.groupId 
+            ? { _id: fileId, groupId: user.groupId } 
+            : { _id: fileId, ownerEmail: email };
+
+        const file = await File.findOne(query);
         if (!file) {
             return res.status(404).json({ error: "File not found or unauthorized" });
         }

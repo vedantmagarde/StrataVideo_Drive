@@ -95,7 +95,7 @@ const SettingsPage = () => {
                                         <PlaySquare className="w-6 h-6 text-red-500" />
                                         <div>
                                             <p className="font-medium">{profile.youtube.channelName}</p>
-                                            <p className="text-sm text-slate-500">Quota Used: {profile.youtube.quotaUsed} / 10000</p>
+                                            <p className="text-sm text-slate-500">Quota Used: {profile.youtube.quotaUsed.toLocaleString()}</p>
                                         </div>
                                     </div>
                                     <button onClick={handleDisconnectYoutube} className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm transition-colors border border-slate-300">
@@ -103,7 +103,7 @@ const SettingsPage = () => {
                                     </button>
                                 </div>
                             ) : (
-                                <button onClick={handleConnectYoutube} className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors">
+                                <button onClick={handleConnectYoutube} className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors shadow-sm">
                                     <PlaySquare className="w-5 h-5" />
                                     Connect YouTube Account
                                 </button>
@@ -120,7 +120,7 @@ const SettingsPage = () => {
                             <button
                                 onClick={handleConnectEmail}
                                 disabled={members.length >= 10}
-                                className="flex items-center gap-2 px-4 py-2 bg-blue-600 disabled:bg-slate-700 disabled:text-slate-500 hover:bg-blue-700 rounded-lg font-medium transition-colors"
+                                className="flex items-center gap-2 px-4 py-2 bg-blue-600 disabled:bg-slate-200 disabled:text-slate-400 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors shadow-sm"
                             >
                                 <Plus className="w-4 h-4" />
                                 Connect Email
@@ -142,11 +142,11 @@ const SettingsPage = () => {
                                     </div>
                                     <div className="flex items-center gap-4">
                                         {member.youtube?.connected ? (
-                                            <span className="text-sm text-emerald-400 bg-emerald-400/10 px-3 py-1 rounded-full flex items-center gap-1">
+                                            <span className="text-sm font-medium text-emerald-700 bg-emerald-100 border border-emerald-200 px-3 py-1 rounded-full flex items-center gap-1">
                                                 <PlaySquare className="w-3 h-3" /> Connected
                                             </span>
                                         ) : (
-                                            <span className="text-sm text-amber-400 bg-amber-400/10 px-3 py-1 rounded-full">
+                                            <span className="text-sm font-medium text-amber-700 bg-amber-100 border border-amber-200 px-3 py-1 rounded-full">
                                                 Not Connected
                                             </span>
                                         )}

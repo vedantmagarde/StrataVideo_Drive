@@ -4,6 +4,7 @@ import FileCard from '../components/FileCard';
 import FolderCard from '../components/FolderCard';
 import UploadButton from '../components/UploadButton';
 import JobStatusPoller from '../components/JobStatusPoller';
+import ConnectionWarningModal from '../components/ConnectionWarningModal';
 import api from '../api/axios';
 import { Search, ChevronRight, FolderPlus, ChevronDown, Clock, ArrowDownAZ, ArrowUpZA } from 'lucide-react';
 
@@ -17,6 +18,25 @@ const DashboardPage = () => {
     const [folderPath, setFolderPath] = useState([{ id: null, name: 'Root' }]);
     const [sortOption, setSortOption] = useState('newest');
     const [isSortOpen, setIsSortOpen] = useState(false);
+    const [groupMembers, setGroupMembers] = useState([]);
+    const [isWarningModalOpen, setIsWarningModalOpen] = useState(false);
+
+    const fetchMembers = async () => {
+        try {
+            const res = await api.get('/group/members');
+            const members = res.data.members;
+            setGroupMembers(members);
+            
+            const connectedCount = members.filter(m => m.youtube?.connected).length;
+            if (connectedCount < 2) {
+                // Check if user already dismissed it this session, optional. 
+                // For now, always show until they connect 2.
+                setIsWarningModalOpen(true);
+            }
+        } catch (error) {
+            console.error("Error fetching group members:", error);
+        }
+    };
 
     const fetchContent = async () => {
         try {
@@ -49,6 +69,7 @@ const DashboardPage = () => {
 
     useEffect(() => {
         fetchContent();
+        fetchMembers();
     }, [searchQuery, activeCategory, currentFolderId, sortOption]);
 
     const handleUploadQueued = (jobId) => {
@@ -152,6 +173,7 @@ const DashboardPage = () => {
                     }
                 }} 
                 setCurrentFolderId={setCurrentFolderId} 
+                groupMembers={groupMembers}
             />
             
             <main className="flex-1 flex flex-col overflow-hidden">
@@ -295,6 +317,12 @@ const DashboardPage = () => {
                     ))}
                 </div>
             </main>
+
+            <ConnectionWarningModal 
+                isOpen={isWarningModalOpen} 
+                onClose={() => setIsWarningModalOpen(false)} 
+                members={groupMembers} 
+            />
         </div>
     );
 };

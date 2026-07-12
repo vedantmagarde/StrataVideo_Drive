@@ -40,10 +40,12 @@ export const getFolders = async (req, res) => {
         else if (sort === 'name_asc') sortObj = { name: 1 };
         else if (sort === 'name_desc') sortObj = { name: -1 };
 
-        const folders = await Folder.find({
-            ownerEmail: email,
-            parentFolderId: parentFolderId || null
-        }).sort(sortObj);
+        const user = await User.findOne({ email });
+        let query = user.groupId 
+            ? { groupId: user.groupId, parentFolderId: parentFolderId || null } 
+            : { ownerEmail: email, parentFolderId: parentFolderId || null };
+
+        const folders = await Folder.find(query).sort(sortObj);
 
         res.status(200).json({ folders });
     } catch (error) {
@@ -62,8 +64,13 @@ export const renameFolder = async (req, res) => {
             return res.status(400).json({ error: "Folder name is required" });
         }
 
+        const user = await User.findOne({ email });
+        let query = user.groupId 
+            ? { _id: id, groupId: user.groupId } 
+            : { _id: id, ownerEmail: email };
+
         const folder = await Folder.findOneAndUpdate(
-            { _id: id, ownerEmail: email },
+            query,
             { name },
             { new: true }
         );
@@ -84,13 +91,21 @@ export const deleteFolder = async (req, res) => {
         const { email } = req.user;
         const { id } = req.params;
 
+        const user = await User.findOne({ email });
+        const folderQuery = user.groupId 
+            ? { parentFolderId: folderId, groupId: user.groupId } 
+            : { parentFolderId: folderId, ownerEmail: email };
+            
         const deleteFolderRecursive = async (folderId) => {
-            const childFolders = await Folder.find({ parentFolderId: folderId, ownerEmail: email });
+            const childFolders = await Folder.find(folderQuery);
             for (const child of childFolders) {
                 await deleteFolderRecursive(child._id);
             }
 
-            const files = await File.find({ folderId: folderId, ownerEmail: email });
+            const fileQuery = user.groupId 
+                ? { folderId: folderId, groupId: user.groupId } 
+                : { folderId: folderId, ownerEmail: email };
+            const files = await File.find(fileQuery);
             for (const file of files) {
                 for (const chunk of file.chunks) {
                     try {
@@ -114,7 +129,10 @@ export const deleteFolder = async (req, res) => {
             await Folder.deleteOne({ _id: folderId });
         };
 
-        const rootFolder = await Folder.findOne({ _id: id, ownerEmail: email });
+        const rootQuery = user.groupId 
+            ? { _id: id, groupId: user.groupId } 
+            : { _id: id, ownerEmail: email };
+        const rootFolder = await Folder.findOne(rootQuery);
         if (!rootFolder) {
             return res.status(404).json({ error: "Folder not found" });
         }
