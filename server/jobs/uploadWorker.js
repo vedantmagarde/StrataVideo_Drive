@@ -186,7 +186,8 @@ uploadQueue.process(async (bullJob) => {
             }, { new: true });
 
             await Job.findByIdAndUpdate(jobId, { status: 'ready', progress: 100 });
-            await sendUploadComplete(ownerEmail, finalFile.filename);
+            
+            await sendUploadComplete(ownerEmail, finalFile ? finalFile.filename : 'Deleted File');
             
             if (fs.existsSync(tempFilePath)) fs.unlinkSync(tempFilePath);
             return { success: true, fileId };
@@ -310,7 +311,7 @@ uploadQueue.process(async (bullJob) => {
         await Job.findByIdAndUpdate(jobId, { status: 'ready', progress: 100 });
 
         // 9. Send email
-        await sendUploadComplete(ownerEmail, finalFile.filename);
+        await sendUploadComplete(ownerEmail, finalFile ? finalFile.filename : (fileDoc ? fileDoc.filename : 'Deleted File'));
 
         // 10. Clean up original temp file
         if (fs.existsSync(tempFilePath)) fs.unlinkSync(tempFilePath);

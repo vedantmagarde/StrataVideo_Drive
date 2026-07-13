@@ -30,8 +30,8 @@ const htmlTemplate = (title, message, emoji) => `
 
 export const sendUploadComplete = async (toEmail, filename) => {
     try {
-        await resend.emails.send({
-            from: 'StrataVideo Drive <updates@stratavideo.com>',
+        const response = await resend.emails.send({
+            from: 'StrataVideo Drive <onboarding@resend.dev>',
             to: toEmail,
             subject: 'Upload Complete',
             html: htmlTemplate(
@@ -40,6 +40,11 @@ export const sendUploadComplete = async (toEmail, filename) => {
                 '🚀'
             )
         });
+        if (response.error) {
+            console.error("Resend API Error (upload email):", response.error);
+        } else {
+            console.log("Email sent successfully!", response.data);
+        }
     } catch (error) {
         console.error("Error sending upload email:", error);
     }
@@ -47,8 +52,8 @@ export const sendUploadComplete = async (toEmail, filename) => {
 
 export const sendDownloadReady = async (toEmail, filename) => {
     try {
-        await resend.emails.send({
-            from: 'StrataVideo Drive <updates@stratavideo.com>',
+        const response = await resend.emails.send({
+            from: 'StrataVideo Drive <onboarding@resend.dev>',
             to: toEmail,
             subject: 'File Ready for Download',
             html: htmlTemplate(
@@ -57,6 +62,11 @@ export const sendDownloadReady = async (toEmail, filename) => {
                 '📥'
             )
         });
+        if (response.error) {
+            console.error("Resend API Error (download email):", response.error);
+        } else {
+            console.log("Email sent successfully!", response.data);
+        }
     } catch (error) {
         console.error("Error sending download email:", error);
     }
@@ -64,8 +74,8 @@ export const sendDownloadReady = async (toEmail, filename) => {
 
 export const sendUploadFailed = async (toEmail, filename, reason) => {
     try {
-        await resend.emails.send({
-            from: 'StrataVideo Drive <updates@stratavideo.com>',
+        const response = await resend.emails.send({
+            from: 'StrataVideo Drive <onboarding@resend.dev>',
             to: toEmail,
             subject: 'Upload Failed',
             html: htmlTemplate(
@@ -74,6 +84,11 @@ export const sendUploadFailed = async (toEmail, filename, reason) => {
                 '❌'
             )
         });
+        if (response.error) {
+            console.error("Resend API Error (upload failed email):", response.error);
+        } else {
+            console.log("Email sent successfully!", response.data);
+        }
     } catch (error) {
         console.error("Error sending failed upload email:", error);
     }

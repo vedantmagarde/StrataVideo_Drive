@@ -3,6 +3,33 @@ import api from '../api/axios';
 import { auth } from '../firebase';
 import { CheckCircle2, XCircle, Loader2, Download, X } from 'lucide-react';
 
+const playNotificationSound = () => {
+    try {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContext) return;
+        const ctx = new AudioContext();
+        
+        const osc = ctx.createOscillator();
+        const gainNode = ctx.createGain();
+        
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(880, ctx.currentTime); 
+        osc.frequency.exponentialRampToValueAtTime(1760, ctx.currentTime + 0.05); 
+        
+        gainNode.gain.setValueAtTime(0, ctx.currentTime);
+        gainNode.gain.linearRampToValueAtTime(0.3, ctx.currentTime + 0.01); 
+        gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1); 
+        
+        osc.connect(gainNode);
+        gainNode.connect(ctx.destination);
+        
+        osc.start();
+        osc.stop(ctx.currentTime + 1);
+    } catch (e) {
+        console.error("Audio notification failed:", e);
+    }
+};
+
 const JobStatusPoller = ({ jobId, onComplete, onFailed }) => {
     const [job, setJob] = useState(null);
     const [downloadData, setDownloadData] = useState(null);
@@ -17,6 +44,7 @@ const JobStatusPoller = ({ jobId, onComplete, onFailed }) => {
                 setJob(currentJob);
 
                 if (currentJob.status === 'ready') {
+                    playNotificationSound();
                     if (currentJob.type === 'download' && res.data.downloadUrl) {
                         // Store the url and filename to let the user trigger it manually
                         setDownloadData({

@@ -21,6 +21,7 @@ if (!fs.existsSync(tmpDir)) {
 import "./jobs/uploadWorker.js";
 import "./jobs/downloadWorker.js";
 import "./jobs/quotaReset.js";
+import "./jobs/tmpCleanup.js";
 
 const app = express();
 const PORT = process.env.PORT || 5000;
