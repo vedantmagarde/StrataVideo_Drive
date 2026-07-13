@@ -2,6 +2,8 @@ import React, { useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 
+import { StrataVideoIcon } from '../components/StrataVideoIcon';
+
 const LoginPage = () => {
     const { signIn, currentUser } = useAuth();
     const navigate = useNavigate();
@@ -23,7 +25,10 @@ const LoginPage = () => {
     return (
         <div className="flex h-screen w-full items-center justify-center bg-slate-50">
             <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-xl border border-slate-200 text-center">
-                <h1 className="mb-2 text-3xl font-bold text-slate-900 tracking-tight">StrataVideo Drive</h1>
+                <div className="flex items-center justify-center space-x-3 mb-4">
+                    <StrataVideoIcon className="w-10 h-10" />
+                    <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">StrataVideo Drive</h1>
+                </div>
                 <p className="mb-8 text-slate-500">Infinite cloud storage via YouTube.</p>
                 
                 <button 
