@@ -119,6 +119,7 @@ const uploadToYouTube = async (videoPath, youtubeAccount, onProgress, chunkIndex
 
 uploadQueue.process(async (bullJob) => {
     const { fileId, jobId, ownerEmail, tempFilePath, groupId, uploadMethod } = bullJob.data;
+    let uploadedChunksRecord = [];
 
     try {
         await Job.findByIdAndUpdate(jobId, { status: 'processing', progress: 5 });
@@ -196,7 +197,6 @@ uploadQueue.process(async (bullJob) => {
         // 4. Split into chunks
         const chunks = splitIntoChunks(fileBuffer);
         const totalChunks = chunks.length;
-        const uploadedChunksRecord = [];
 
         // Fetch all connected accounts for Round-Robin sharding
         const connectedAccounts = await getAllAvailableAccounts(groupId || ownerEmail);
@@ -268,7 +268,8 @@ uploadQueue.process(async (bullJob) => {
                             chunkIndex: chunk.chunkIndex,
                             videoId,
                             youtubeAccountEmail: ytAccount.email,
-                            accountId: ytAccount._id
+                            accountId: ytAccount._id,
+                            refreshToken: ytAccount.youtube.refreshToken
                         });
 
                         // g. increment quota
@@ -322,6 +323,28 @@ uploadQueue.process(async (bullJob) => {
         await Job.findByIdAndUpdate(jobId, { status: 'failed', error: error.message });
         await File.findByIdAndUpdate(fileId, { status: 'failed' });
         await sendUploadFailed(ownerEmail, "Unknown File", error.message);
+
+        // Clean up orphaned chunks from YouTube if any were successfully uploaded before the job failed
+        if (uploadedChunksRecord.length > 0) {
+            console.log(`[UploadWorker] Job failed/cancelled. Cleaning up ${uploadedChunksRecord.length} orphaned chunks from YouTube...`);
+            for (const record of uploadedChunksRecord) {
+                try {
+                    const token = await getValidToken(record.youtubeAccountEmail);
+                    const oauth2Client = getOAuth2Client();
+                    if (record.refreshToken) {
+                        oauth2Client.setCredentials({ 
+                            access_token: token,
+                            refresh_token: record.refreshToken
+                        });
+                        const youtube = google.youtube({ version: 'v3', auth: oauth2Client });
+                        await youtube.videos.delete({ id: record.videoId });
+                        console.log(`[UploadWorker] Successfully deleted orphaned chunk ${record.videoId}`);
+                    }
+                } catch (cleanupErr) {
+                    console.error(`[UploadWorker] Failed to delete orphaned chunk ${record.videoId}:`, cleanupErr.message);
+                }
+            }
+        }
 
         if (fs.existsSync(tempFilePath)) fs.unlinkSync(tempFilePath);
         throw error;

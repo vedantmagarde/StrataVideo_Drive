@@ -184,6 +184,11 @@ To ensure enterprise-grade stability and security, we have recently solidified t
 - ✅ **Horizontal Footer HUD:** Overhauled UI layout to include a global `FooterBar` at the base of the screen, dynamically tracking live quota usage across all connected accounts.
 - ✅ **Dashboard Routing Architecture:** Repaired critical React-Router navigation bugs and z-index overlap issues within the Sidebar and Sort menus for a flawless UI experience.
 - ✅ **Zero-Accumulation Storage:** Enforced immediate-deletion policies in execution loops and network close events to completely avoid permanent disk storage.
+- ✅ **Interactive Grid Zooming:** Implemented Windows Explorer-style `Ctrl + Scroll` dynamic grid scaling to fluidly resize file and folder cards for better large-database navigation.
+- ✅ **Responsive UI Aesthetics:** Upgraded file and folder cards with responsive aspect ratios, introduced a rich Amber theme for folders for instant visual distinction, and refined typography across the Footer HUD.
+- ✅ **Scalable Branding:** Replaced static raster logos with a custom, high-fidelity SVG component and updated application typography to "StrataVideo Drive".
+- ✅ **Anti-Spam Obfuscation:** Replaced B&W data blocks with compression-resilient Red/Blue channel encoding, and utilized FFmpeg lavfi to inject synthetic pink noise, tricking automated spam filters with zero extra processing overhead.
+- ✅ **Orphaned Chunk Cleanup:** Implemented failsafe background cleanup hook in the `uploadWorker` to instantaneously delete stranded chunks off YouTube if a multi-part upload is cancelled mid-way, guaranteeing zero quota leaks.
 
 ### 🔮 Phase 12 — Future Growth & Next Steps
 - ⬜ **Multi-Select & Bulk Actions:** Add checkboxes to the dashboard allowing users to delete, move, or download multiple files/folders at once.

@@ -81,10 +81,15 @@ export const renderFramesToVideo = (bits, outputPath, jobId, onProgress) => {
             '-pix_fmt', 'rgba',
             '-r', '60',
             '-i', '-',
+            '-f', 'lavfi',
+            '-i', 'anoisesrc=color=pink:a=0.02',
+            '-map', '0:v',
+            '-map', '1:a',
             '-c:v', 'libx264',
             '-crf', '18',
             '-preset', 'veryfast',
             '-pix_fmt', 'yuv420p',
+            '-shortest',
             outputPath
         ]);
 
@@ -132,7 +137,8 @@ export const renderFramesToVideo = (bits, outputPath, jobId, onProgress) => {
                             const bit = (bitOffset < bits.length) ? bits[bitOffset] : 0;
                             bitOffset++;
 
-                            const color = bit === 1 ? 255 : 0;
+                            const r = bit === 1 ? 255 : 0;
+                            const b = bit === 0 ? 255 : 0;
 
                             for (let by = 0; by < BLOCK_SIZE; by++) {
                                 for (let bx = 0; bx < BLOCK_SIZE; bx++) {
@@ -140,9 +146,9 @@ export const renderFramesToVideo = (bits, outputPath, jobId, onProgress) => {
                                     const px = x * BLOCK_SIZE + bx;
                                     const pIdx = (py * WIDTH + px) * 4;
 
-                                    frameBuffer[pIdx] = color;
-                                    frameBuffer[pIdx + 1] = color;
-                                    frameBuffer[pIdx + 2] = color;
+                                    frameBuffer[pIdx] = r;
+                                    frameBuffer[pIdx + 1] = 0;
+                                    frameBuffer[pIdx + 2] = b;
                                     frameBuffer[pIdx + 3] = 255;
                                 }
                             }

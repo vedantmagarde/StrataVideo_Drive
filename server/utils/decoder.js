@@ -114,7 +114,9 @@ export const decodeFramesFromStream = (videoPath, jobId, onProgress) => {
                         const center_y = y * BLOCK_SIZE + Math.floor(BLOCK_SIZE / 2);
                         const center_x = x * BLOCK_SIZE + Math.floor(BLOCK_SIZE / 2);
                         const pIdx = (center_y * WIDTH + center_x) * 4;
-                        frameData[bitIdx++] = frameBuffer[pIdx] > 128 ? 1 : 0;
+                        const red = frameBuffer[pIdx];
+                        const blue = frameBuffer[pIdx + 2];
+                        frameData[bitIdx++] = red > blue ? 1 : 0;
                     }
                 }
                 allBits.push(frameData);
