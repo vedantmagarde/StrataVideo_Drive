@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { HardDrive, Settings, Image, Film, Music, FileText, Archive, Code, ChevronDown, ChevronUp } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { StrataVideoIcon } from './StrataVideoIcon';
 
 const Sidebar = ({ activeCategory, setActiveCategory, setCurrentFolderId, groupMembers = [] }) => {
     const { currentUser } = useAuth();
@@ -22,10 +23,12 @@ const Sidebar = ({ activeCategory, setActiveCategory, setCurrentFolderId, groupM
     return (
         <aside className="w-64 border-r border-slate-200 bg-white/50 backdrop-blur flex flex-col">
             <div className="h-16 flex items-center px-6 border-b border-slate-200">
-                <span className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-                    <span className="w-6 h-6 rounded-md bg-blue-600 flex items-center justify-center text-sm text-white">S</span>
-                    StrataVideo
-                </span>
+                <div className="flex items-center space-x-3">
+                    <StrataVideoIcon className="w-8 h-8" />
+                    <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">
+                        StrataVideo Drive
+                    </h1>
+                </div>
             </div>
             
             <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1">

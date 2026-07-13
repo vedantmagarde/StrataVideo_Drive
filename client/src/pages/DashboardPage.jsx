@@ -25,6 +25,25 @@ const DashboardPage = () => {
     const [isSortOpen, setIsSortOpen] = useState(false);
     const [groupMembers, setGroupMembers] = useState([]);
     const [isWarningModalOpen, setIsWarningModalOpen] = useState(false);
+    const [zoomLevel, setZoomLevel] = useState(1);
+
+    useEffect(() => {
+        const handleWheel = (e) => {
+            if (e.ctrlKey) {
+                e.preventDefault();
+                setZoomLevel(prev => {
+                    const delta = e.deltaY > 0 ? -0.1 : 0.1;
+                    return Math.max(0.5, Math.min(prev + delta, 3));
+                });
+            }
+        };
+
+        const container = document.getElementById('main-scroll-container');
+        if (container) {
+            container.addEventListener('wheel', handleWheel, { passive: false });
+            return () => container.removeEventListener('wheel', handleWheel);
+        }
+    }, []);
 
     useEffect(() => {
         if (location.state?.category !== undefined) {
@@ -268,7 +287,7 @@ const DashboardPage = () => {
                     </div>
                 </header>
 
-                <div className="flex-1 overflow-y-auto p-8 relative">
+                <div id="main-scroll-container" className="flex-1 overflow-y-auto px-8 pt-4 pb-8 relative">
                     <div className="mb-6 flex items-center text-lg font-bold text-slate-800">
                         {searchQuery ? (
                             <span>Search Results</span>
@@ -296,7 +315,10 @@ const DashboardPage = () => {
                             <p className="text-slate-500">No content found here. Upload a file or create a folder!</p>
                         </div>
                     ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pb-20">
+                        <div 
+                            className="grid gap-6 pb-20"
+                            style={{ gridTemplateColumns: `repeat(auto-fill, minmax(${250 * zoomLevel}px, 1fr))` }}
+                        >
                             {combinedContent.map(item => (
                                 item.itemType === 'folder' ? (
                                     <FolderCard

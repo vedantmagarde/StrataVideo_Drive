@@ -1,0 +1,15 @@
+import React from 'react';
+
+export const StrataVideoIcon = ({ className = "w-10 h-10" }) => (
+  <svg 
+    viewBox="0 0 100 100" 
+    fill="none" 
+    xmlns="http://www.w3.org/2000/svg"
+    className={className}
+  >
+    <rect width="100" height="100" rx="20" fill="#2563EB"/>
+    <path d="M35 30 L35 70 L70 50 Z" fill="#FFFFFF" opacity="0.9"/>
+    <line x1="25" y1="20" x2="75" y2="20" stroke="#60A5FA" strokeWidth="4" strokeLinecap="round"/>
+    <line x1="25" y1="80" x2="75" y2="80" stroke="#60A5FA" strokeWidth="4" strokeLinecap="round"/>
+  </svg>
+);

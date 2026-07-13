@@ -21,78 +21,91 @@ const formatBytes = (bytes, decimals = 2) => {
     return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
 };
 
-const getIcon = (mimeType) => {
-    if (!mimeType) return <File className="w-8 h-8 text-slate-400" />;
-    if (mimeType.startsWith('image/')) return <Image className="w-8 h-8 text-blue-400" />;
-    if (mimeType.startsWith('video/')) return <Film className="w-8 h-8 text-purple-400" />;
-    if (mimeType.startsWith('audio/')) return <Music className="w-8 h-8 text-yellow-400" />;
-    if (mimeType.includes('pdf') || mimeType.includes('document') || mimeType.includes('text')) return <FileText className="w-8 h-8 text-red-400" />;
-    if (mimeType.includes('zip') || mimeType.includes('tar') || mimeType.includes('rar')) return <Archive className="w-8 h-8 text-orange-400" />;
-    if (mimeType.includes('json') || mimeType.includes('javascript') || mimeType.includes('html')) return <Code className="w-8 h-8 text-green-400" />;
-    return <File className="w-8 h-8 text-slate-400" />;
+const getIconInfo = (mimeType) => {
+    if (!mimeType) return { icon: File, color: 'text-slate-400', bg: 'bg-slate-100' };
+    if (mimeType.startsWith('image/')) return { icon: Image, color: 'text-pink-500', bg: 'bg-pink-50' };
+    if (mimeType.startsWith('video/')) return { icon: Film, color: 'text-purple-500', bg: 'bg-purple-50' };
+    if (mimeType.startsWith('audio/')) return { icon: Music, color: 'text-yellow-500', bg: 'bg-yellow-50' };
+    if (mimeType.includes('pdf') || mimeType.includes('document') || mimeType.includes('text')) return { icon: FileText, color: 'text-blue-500', bg: 'bg-blue-50' };
+    if (mimeType.includes('zip') || mimeType.includes('tar') || mimeType.includes('rar')) return { icon: Archive, color: 'text-orange-500', bg: 'bg-orange-50' };
+    if (mimeType.includes('json') || mimeType.includes('javascript') || mimeType.includes('html')) return { icon: Code, color: 'text-emerald-500', bg: 'bg-emerald-50' };
+    return { icon: File, color: 'text-slate-400', bg: 'bg-slate-100' };
 };
 
 const getStatusBadge = (status) => {
+    if (status === 'ready') return null; // HIDDEN WHEN READY
     const styles = {
-        pending: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20',
-        processing: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
-        ready: 'bg-green-500/10 text-green-500 border-green-500/20',
-        failed: 'bg-red-500/10 text-red-500 border-red-500/20',
+        pending: 'bg-yellow-100 text-yellow-700 border-yellow-200',
+        processing: 'bg-blue-100 text-blue-700 border-blue-200',
+        failed: 'bg-red-100 text-red-700 border-red-200',
     };
     return (
-        <span className={`text-xs px-2 py-1 rounded-full border ${styles[status] || styles.pending} uppercase tracking-wider font-semibold`}>
+        <span className={`text-[10px] px-2 py-0.5 rounded-full border ${styles[status] || styles.pending} uppercase tracking-wider font-bold shadow-sm`}>
             {status}
         </span>
     );
 };
 
 const FileCard = ({ file, onDelete, onDownload }) => {
+    const { icon: Icon, color, bg } = getIconInfo(file.mimeType);
+
     return (
-        <div className="bg-white rounded-xl p-5 border border-slate-200 hover:border-slate-300 transition-all group shadow-sm hover:shadow-xl">
-            <div className="flex justify-between items-start mb-4">
-                <div className="p-3 bg-slate-50 rounded-lg">
-                    {getIcon(file.mimeType)}
+        <div className="relative bg-white rounded-2xl p-5 border border-slate-100 transition-all duration-300 group shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] hover:shadow-[0_20px_40px_-15px_rgba(0,0,0,0.1)] hover:-translate-y-1 hover:border-slate-200 overflow-hidden flex flex-col justify-between aspect-[4/3] min-h-[160px]">
+            {/* Subtle Gradient Background on Hover */}
+            <div className="absolute inset-0 bg-gradient-to-br from-transparent to-slate-50/50 opacity-0 group-hover:opacity-100 transition-opacity duration-300 -z-10" />
+
+            <div className="flex justify-between items-start mb-2">
+                <div className={`p-3 rounded-xl ${bg} transition-transform duration-300 group-hover:scale-110 shadow-sm`}>
+                    <Icon className={`w-6 h-6 ${color}`} strokeWidth={2.5} />
                 </div>
-                <div className="flex gap-2 items-center">
+                
+                <div className="flex gap-1 items-center">
                     {file.uploadMethod === 'direct' && file.youtubeVideoId && (
                         <a 
                             href={`https://youtu.be/${file.youtubeVideoId}`} 
                             target="_blank" 
                             rel="noopener noreferrer"
-                            className="p-1 rounded-md text-red-500 hover:bg-red-50 transition-colors"
+                            className="text-[#FF0000] opacity-80 hover:opacity-100 transition-all hover:scale-110 drop-shadow-sm mr-1"
                             title="Stream on YouTube"
                         >
-                            <YoutubeIcon className="w-6 h-6" />
+                            <YoutubeIcon className="w-7 h-7" />
                         </a>
                     )}
+
+                    {/* Action Icons - Always visible, slightly faded until hovered */}
+                    <div className="flex gap-1 transition-opacity duration-300">
+                        <button 
+                            onClick={onDownload}
+                            disabled={file.status !== 'ready'}
+                            className="p-1.5 text-slate-400 opacity-80 hover:opacity-100 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Download"
+                        >
+                            <Download className="w-5 h-5" strokeWidth={2.5} />
+                        </button>
+                        <button 
+                            onClick={onDelete}
+                            className="p-1.5 text-slate-400 opacity-80 hover:opacity-100 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
+                            title="Delete"
+                        >
+                            <Trash2 className="w-5 h-5" strokeWidth={2.5} />
+                        </button>
+                    </div>
+
                     {getStatusBadge(file.status)}
                 </div>
             </div>
             
-            <h3 className="font-semibold text-slate-900 truncate mb-1" title={file.filename}>
-                {file.filename}
-            </h3>
-            
-            <div className="flex items-center justify-between mt-4 text-sm text-slate-500">
-                <span>{formatBytes(file.sizeBytes)}</span>
-                <span>{new Date(file.uploadedAt).toLocaleDateString()}</span>
+            <div className="mt-auto">
+                <h3 className="font-bold text-slate-800 truncate mb-1.5 text-[15px] tracking-tight group-hover:text-blue-600 transition-colors" title={file.filename}>
+                    {file.filename}
+                </h3>
+                
+                <div className="flex items-center justify-between text-xs text-slate-400 font-medium">
+                    <span className="bg-slate-100 px-2 py-0.5 rounded-md">{formatBytes(file.sizeBytes)}</span>
+                    <span>{new Date(file.uploadedAt).toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
+                </div>
             </div>
 
-            <div className="mt-5 flex gap-2 pt-4 border-t border-slate-200 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button 
-                    onClick={onDownload}
-                    disabled={file.status !== 'ready'}
-                    className="flex-1 flex items-center justify-center gap-2 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                    <Download className="w-4 h-4" /> Download
-                </button>
-                <button 
-                    onClick={onDelete}
-                    className="p-2 bg-red-500/10 text-red-500 hover:bg-red-500/20 rounded-lg transition-colors"
-                >
-                    <Trash2 className="w-4 h-4" />
-                </button>
-            </div>
         </div>
     );
 };
