@@ -6,8 +6,14 @@ import { getValidToken, getValidTokenById } from '../controllers/youtubeControll
 import { decrypt } from './encryption.js';
 import ffmpegPath from 'ffmpeg-static';
 import { create } from 'youtube-dl-exec';
-const youtubedl = create('yt-dlp');
+import os from 'os';
 import { activeJobs } from './activeJobs.js';
+
+const ytDlpBinary = process.platform === 'win32'
+    ? path.join(os.homedir(), 'AppData', 'Roaming', 'Python', 'Python312', 'Scripts', 'yt-dlp.exe')
+    : 'yt-dlp';
+
+const youtubedl = create(ytDlpBinary);
 
 let RS;
 try {
@@ -38,11 +44,15 @@ export const downloadVideo = async (videoId, accountId, tempDir, jobId, needsAud
                 o: outputPath
             };
 
-            let cookiesPath = null;
+            let cookiesPath = path.join(tempDir, 'youtube_cookies.txt');
+            
+            // Inject the absolute path of the currently running Node.js executable
+            // so yt-dlp can solve YouTube's JavaScript n-challenges
+            ytDlpOptions['js-runtimes'] = `node:${process.execPath}`;
+            ytDlpOptions['remote-components'] = 'ejs:github';
+
             if (process.env.YOUTUBE_COOKIES) {
-                cookiesPath = path.join(tempDir, 'youtube_cookies.txt');
                 let cookiesContent = process.env.YOUTUBE_COOKIES;
-                // Handle cases where newlines are literal \n strings from env variables
                 if (cookiesContent.includes('\\n')) {
                     cookiesContent = cookiesContent.replace(/\\n/g, '\n');
                 }
@@ -51,9 +61,11 @@ export const downloadVideo = async (videoId, accountId, tempDir, jobId, needsAud
                 }
                 ytDlpOptions.cookies = cookiesPath;
                 console.log("[Decoder] Using injected YouTube Cookies for authentication.");
+            } else if (fs.existsSync(cookiesPath)) {
+                ytDlpOptions.cookies = cookiesPath;
+                console.log("[Decoder] Using local youtube_cookies.txt file for authentication.");
             } else {
-                // Fallback to strict API bypass if no cookies are provided
-                ytDlpOptions['extractor-args'] = 'youtube:player_client=tv_embedded,android_creator;player_skip=webpage,configs';
+                ytDlpOptions['extractor-args'] = 'youtube:player_client=android,ios;player_skip=webpage,configs';
                 console.log("[Decoder] No cookies found. Attempting anonymous API bypass.");
             }
 

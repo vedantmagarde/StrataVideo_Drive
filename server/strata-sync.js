@@ -39,7 +39,7 @@ const processNextJob = async () => {
         const job = await Job.findOneAndUpdate(
             { status: 'pending', type: 'download' },
             { status: 'processing', progress: 5 },
-            { new: true }
+            { returnDocument: 'after' }
         );
 
         if (!job) {
