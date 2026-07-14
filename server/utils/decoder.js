@@ -85,10 +85,11 @@ export const decodeFramesFromStream = (videoPath, jobId, onProgress) => {
             activeJobs.set(jobId, ffmpeg);
         }
 
-        const allBits = [];
+        const allBytes = [];
         const chunks = [];
         let accumulatedLength = 0;
         const rgbaSize = WIDTH * HEIGHT * 4;
+        const BYTES_PER_FRAME = BITS_PER_FRAME / 8;
 
         ffmpeg.stdout.on('data', (chunk) => {
             chunks.push(chunk);
@@ -107,19 +108,27 @@ export const decodeFramesFromStream = (videoPath, jobId, onProgress) => {
                     accumulatedLength = 0;
                 }
 
-                const frameData = new Uint8Array(BITS_PER_FRAME);
+                const frameBytes = new Uint8Array(BYTES_PER_FRAME);
                 let bitIdx = 0;
+                let currentByte = 0;
+                
                 for (let y = 0; y < BLOCKS_Y; y++) {
                     for (let x = 0; x < BLOCKS_X; x++) {
                         const center_y = y * BLOCK_SIZE + Math.floor(BLOCK_SIZE / 2);
                         const center_x = x * BLOCK_SIZE + Math.floor(BLOCK_SIZE / 2);
                         const pIdx = (center_y * WIDTH + center_x) * 4;
-                        const red = frameBuffer[pIdx];
-                        const blue = frameBuffer[pIdx + 2];
-                        frameData[bitIdx++] = red > blue ? 1 : 0;
+                        
+                        const bit = frameBuffer[pIdx] > 128 ? 1 : 0;
+                        currentByte = (currentByte << 1) | bit;
+                        
+                        if ((bitIdx + 1) % 8 === 0) {
+                            frameBytes[Math.floor(bitIdx / 8)] = currentByte;
+                            currentByte = 0;
+                        }
+                        bitIdx++;
                     }
                 }
-                allBits.push(frameData);
+                allBytes.push(frameBytes);
             }
         });
 
@@ -168,14 +177,14 @@ export const decodeFramesFromStream = (videoPath, jobId, onProgress) => {
                 reject(new Error(`FFmpeg exit code ${code}`));
             } else {
                 console.log(`[Decoder] FFmpeg completed successfully`);
-                const totalBits = allBits.reduce((acc, curr) => acc + curr.length, 0);
-                const finalBits = new Uint8Array(totalBits);
+                const totalBytes = allBytes.reduce((acc, curr) => acc + curr.length, 0);
+                const finalBytes = new Uint8Array(totalBytes);
                 let offset = 0;
-                for (let arr of allBits) {
-                    finalBits.set(arr, offset);
+                for (let arr of allBytes) {
+                    finalBytes.set(arr, offset);
                     offset += arr.length;
                 }
-                resolve(finalBits);
+                resolve(finalBytes);
             }
         });
     });
@@ -240,8 +249,7 @@ export const decode = async (videoId, accountId, ownerEmail, tempDir, jobId, onP
 
         // 2. & 3. extract frames & convert frames to buffer via streaming
         console.log(`[Decoder] Extracting frames...`);
-        const bits = await decodeFramesFromStream(videoPath, jobId, onProgress);
-        const rsBuffer = bitsToBuffer(bits);
+        const rsBuffer = await decodeFramesFromStream(videoPath, jobId, onProgress);
         console.log(`[Decoder] Frame extraction complete.`);
 
         // 4. remove Reed-Solomon

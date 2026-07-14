@@ -1,36 +1,57 @@
-import Bull from 'bull';
-import dotenv from 'dotenv';
-dotenv.config();
+// Native MemoryQueue implementation (Replaces BullMQ/Redis)
 
-const redisConfig = {
-    redis: {
-        host: process.env.UPSTASH_REDIS_URL ? new URL(process.env.UPSTASH_REDIS_URL).hostname : '127.0.0.1',
-        port: process.env.UPSTASH_REDIS_URL ? new URL(process.env.UPSTASH_REDIS_URL).port : 6379,
-        password: process.env.UPSTASH_REDIS_URL ? new URL(process.env.UPSTASH_REDIS_URL).password : undefined,
-        tls: process.env.UPSTASH_REDIS_URL && process.env.UPSTASH_REDIS_URL.includes('rediss') ? {} : undefined
+class MemoryQueue {
+    constructor(name) {
+        this.name = name;
+        this.jobs = [];
+        this.isProcessing = false;
+        this.processFn = null;
     }
-};
 
-export const uploadQueue = new Bull('upload-queue', redisConfig);
-export const downloadQueue = new Bull('download-queue', redisConfig);
+    process(fn) {
+        this.processFn = fn;
+    }
+
+    async add(data) {
+        this.jobs.push(data);
+        console.log(`[MemoryQueue - ${this.name}] Job added. Queue size: ${this.jobs.length}`);
+        this.run();
+    }
+
+    async run() {
+        if (this.isProcessing || this.jobs.length === 0 || !this.processFn) return;
+        this.isProcessing = true;
+        
+        const data = this.jobs.shift();
+        console.log(`[MemoryQueue - ${this.name}] Starting job processing...`);
+        
+        const bullJob = {
+            data,
+            progress: (val) => {
+                // In a memory queue, progress is mostly tracked by MongoDB updates in the worker.
+                // We keep this function so existing worker code doesn't crash.
+            }
+        };
+
+        try {
+            await this.processFn(bullJob);
+            console.log(`[MemoryQueue - ${this.name}] Job completed successfully.`);
+        } catch (e) {
+            console.error(`[MemoryQueue - ${this.name}] Job failed:`, e);
+        } finally {
+            this.isProcessing = false;
+            // Check for more jobs asynchronously
+            setImmediate(() => this.run());
+        }
+    }
+}
+
+export const uploadQueue = new MemoryQueue('upload-queue');
+export const downloadQueue = new MemoryQueue('download-queue');
 
 // Debugging listeners for queue events
 const setupQueueListeners = (queue, queueName) => {
-    queue.on('error', (error) => {
-        console.error(`[Bull Queue - ${queueName}] ERROR:`, error.message || error);
-    });
-    queue.on('waiting', (jobId) => {
-        console.log(`[Bull Queue - ${queueName}] Job ${jobId} is waiting to be processed`);
-    });
-    queue.on('active', (job, jobPromise) => {
-        console.log(`[Bull Queue - ${queueName}] Job ${job.id} has started processing`);
-    });
-    queue.on('failed', (job, err) => {
-        console.error(`[Bull Queue - ${queueName}] Job ${job.id} failed with error:`, err.message);
-    });
-    queue.on('ready', () => {
-        console.log(`[Bull Queue - ${queueName}] Successfully connected to Redis and ready to process jobs.`);
-    });
+    // MemoryQueue does not require error/ready listeners in the same way as Redis-based Bull queues
 };
 
 setupQueueListeners(uploadQueue, 'uploadQueue');

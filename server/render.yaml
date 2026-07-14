@@ -1,10 +1,8 @@
 services:
   - type: web
     name: stratavideo-backend
-    env: node
-    plan: starter
-    buildCommand: npm install
-    startCommand: npm start
+    env: docker
+    plan: free
     envVars:
       - key: MONGO_URI
         sync: false
@@ -19,8 +17,6 @@ services:
       - key: GOOGLE_CLIENT_SECRET
         sync: false
       - key: YOUTUBE_REDIRECT_URI
-        sync: false
-      - key: UPSTASH_REDIS_URL
         sync: false
       - key: RESEND_API_KEY
         sync: false
