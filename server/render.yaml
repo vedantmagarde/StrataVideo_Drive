@@ -3,6 +3,7 @@ services:
     name: stratavideo-backend
     env: docker
     plan: free
+    rootDir: server
     envVars:
       - key: MONGO_URI
         sync: false
