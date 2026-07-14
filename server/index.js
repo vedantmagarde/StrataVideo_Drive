@@ -58,7 +58,11 @@ app.get("/api/health", (req, res) => {
 });
 
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
     connectDb();
 });
+
+// Required for Render.com - increases timeout to prevent 502/CORS errors during uploads
+server.keepAliveTimeout = 120 * 1000;
+server.headersTimeout = 120 * 1000;
