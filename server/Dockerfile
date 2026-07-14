@@ -11,6 +11,9 @@ RUN apt-get update && apt-get install -y \
 # Install yt-dlp via pip3
 RUN pip3 install yt-dlp
 
+# Create manual symlink for python
+RUN ln -s /usr/bin/python3 /usr/bin/python || true
+
 # Set working directory
 WORKDIR /usr/src/app
 
