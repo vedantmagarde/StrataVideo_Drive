@@ -33,7 +33,16 @@ app.use((req, res, next) => {
 
 app.use(helmet());
 app.use(cors({
-    origin: process.env.FRONTEND_URL || "http://localhost:5173",
+    origin: function (origin, callback) {
+        const allowedOrigin = process.env.FRONTEND_URL ? process.env.FRONTEND_URL.replace(/\/$/, '') : "http://localhost:5173";
+        if (!origin || origin === allowedOrigin || origin === allowedOrigin + '/') {
+            callback(null, true);
+        } else {
+            // Log exactly what origin was blocked to help debug if it happens again
+            console.error(`[CORS Blocked] Origin: ${origin}, Allowed: ${allowedOrigin}`);
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
     credentials: true
 }));
 
