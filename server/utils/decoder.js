@@ -5,7 +5,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { getValidToken, getValidTokenById } from '../controllers/youtubeController.js';
 import { decrypt } from './encryption.js';
 import ffmpegPath from 'ffmpeg-static';
-import youtubedl from 'youtube-dl-exec';
+import { create } from 'youtube-dl-exec';
+const youtubedl = create('yt-dlp');
 import { activeJobs } from './activeJobs.js';
 
 let RS;
@@ -37,35 +38,21 @@ export const downloadVideo = async (videoId, accountId, tempDir, jobId, needsAud
                 o: outputPath
             };
 
-            // Removed OAuth Token injection because yt-dlp fails with 401 Unauthorized when passing a Bearer token to YouTube web endpoints.
-            // Since all videos are uploaded as 'unlisted', they are publicly accessible via the video ID and do not require authentication to download.
-
-            const ytdlProcess = youtubedl.exec(`https://www.youtube.com/watch?v=${videoId}`, ytDlpOptions);
-
-            ytdlProcess.catch(() => {
-                // execa/tinyspawn returns a Promise that rejects on non-zero exit.
-                // We ignore it here because we handle the 'close' event manually below.
-            });
+            const ytdlProcess = youtubedl(`https://www.youtube.com/watch?v=${videoId}`, ytDlpOptions);
 
             if (jobId) {
                 activeJobs.set(jobId, ytdlProcess);
             }
 
-            ytdlProcess.on('close', (code) => {
+            try {
+                await ytdlProcess;
                 if (jobId) activeJobs.delete(jobId);
-                if (code !== 0) {
-                    console.error("yt-dlp error, exit code:", code);
-                    reject(new Error("yt-dlp failed"));
-                } else {
-                    resolve(outputPath);
-                }
-            });
-
-            ytdlProcess.on('error', (err) => {
+                resolve(outputPath);
+            } catch (err) {
                 if (jobId) activeJobs.delete(jobId);
-                console.error("yt-dlp execution error:", err);
-                reject(err);
-            });
+                console.error("[yt-dlp Fatal Error]:", err.message || err);
+                reject(new Error("yt-dlp failed"));
+            }
         } catch (err) {
             reject(err);
         }
