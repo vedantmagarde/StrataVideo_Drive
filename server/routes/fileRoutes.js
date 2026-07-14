@@ -5,6 +5,13 @@ import verifyFirebaseToken from '../middlewares/verifyFirebaseToken.js';
 
 const router = express.Router();
 
+import fs from 'fs';
+
+// Ensure tmp directory exists
+if (!fs.existsSync('./tmp')) {
+    fs.mkdirSync('./tmp');
+}
+
 const upload = multer({
     dest: './tmp',
     limits: { fileSize: 5 * 1024 * 1024 * 1024 } // 5GB limit

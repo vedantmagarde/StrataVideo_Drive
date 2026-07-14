@@ -39,7 +39,6 @@ const UploadButton = ({ onQueued, currentFolderId }) => {
                 if (currentFolderId) formData.append('folderId', currentFolderId);
 
                 const res = await api.post('/files/upload', formData, {
-                    headers: { 'Content-Type': 'multipart/form-data' },
                     onUploadProgress: (progressEvent) => {
                         loadedSizes[index] = progressEvent.loaded;
                         const currentTotalLoaded = loadedSizes.reduce((a, b) => a + b, 0);
