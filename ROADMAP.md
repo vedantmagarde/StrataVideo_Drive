@@ -178,12 +178,10 @@ To ensure enterprise-grade stability and security, we have recently solidified t
 - ✅ **Streaming Token Resilience:** Fixed a critical bug where `gaxios` failed to auto-refresh expired tokens during video streaming. We now "ping" the YouTube API with a lightweight request before streaming to force a secure token refresh.
 - ✅ **Global Sorting (Unified View):** Implemented dynamic MongoDB sorting (A-Z, Date) accessible via a universal frontend dropdown. Specifically modified folder logic to sort by the `updatedAt` (latest modified) timestamp and successfully interleaved folders and files on the frontend to create a perfectly seamless, chronological UI view.
 
-### 🌓 Phase 10 — Hybrid Vault & Architecture Perfection
-- ✅ **Streamable Media:** Introduced bifurcated upload pipeline allowing direct, unencrypted video uploads for instant streaming, alongside the standard AES-256 encrypted chunking method.
-- ✅ **Upload API Sanitization:** Engineered an aggressive regex filter to safely strip mojibake, emojis, and invalid Unicode from file titles before sending to YouTube API, completely preventing `invalidTitle` crashes.
-- ✅ **Orphaned Video Deletion:** Rewrote deletion endpoints to dynamically instantiate OAuth2 clients and issue Google API DELETE requests directly against Streamable Media videos, keeping YouTube perfectly synchronized with MongoDB.
-- ✅ **Decoding Pipeline Integrity:** Decoupled `yt-dlp` download formatting to explicitly force raw `bestvideo` on Secure Storage (preventing AES decryption corruption from compression artifacts) while dynamically injecting audio track parameters for standard Streamable Media downloads.
-- ✅ **Chronological Folder Anchoring:** Engineered an OS-level "Date Modified" algorithm. Backend automatically bumps folder `updatedAt` timestamps upon child uploads. Frontend dynamically toggles between `createdAt` (Oldest First) and `updatedAt` (Newest First) to ensure folders anchor perfectly within chronological file views.
+### 🟧 Phase 10 — Strata Desktop Sync (COMPLETED)
+- [x] Pivot architecture from cloud-based downloads to a local MongoDB polling worker (`strata-sync.js`) due to YouTube SABR streaming anti-bot measures completely blocking datacenter IP fragments.
+- [x] Bypass timeout and rate-limit issues by leveraging the end-user's home Wi-Fi IP address for chunk fetching.
+- [x] Auto-save decrypted files directly to local `Downloads/StrataVideo_Downloads` directory.
 
 ### 🛡️ Phase 11 — Rate Limiting, UI Polishing & Quota Management
 - ✅ **Global Rate Limiting:** Implemented in-memory request throttling across both direct and chunked uploads to prevent YouTube from flagging automated API usage.

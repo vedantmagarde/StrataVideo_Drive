@@ -19,7 +19,9 @@ if (!fs.existsSync(tmpDir)) {
 
 
 import "./jobs/uploadWorker.js";
-import "./jobs/downloadWorker.js";
+// We are disabling the cloud download worker because YouTube permanently blocks Datacenter IPs.
+// Downloads will now be processed by the Local Desktop Sync Node.
+// import "./jobs/downloadWorker.js";
 import "./jobs/quotaReset.js";
 import "./jobs/tmpCleanup.js";
 

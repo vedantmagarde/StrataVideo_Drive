@@ -250,13 +250,7 @@ export const downloadFile = async (req, res) => {
         });
         await job.save();
 
-        await downloadQueue.add({
-            fileId: file._id,
-            jobId: job._id,
-            ownerEmail: email
-        });
-
-        res.status(202).json({ message: "Download job queued", jobId: job._id });
+        res.status(202).json({ message: "Download job queued for Desktop Sync", jobId: job._id });
     } catch (error) {
         console.error("Error in downloadFile:", error);
         res.status(500).json({ error: "Internal server error" });
