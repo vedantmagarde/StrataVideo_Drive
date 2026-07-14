@@ -35,9 +35,27 @@ export const downloadVideo = async (videoId, accountId, tempDir, jobId, needsAud
             const formatStr = needsAudio ? 'best[ext=mp4]/best' : 'bestvideo[ext=mp4]';
             const ytDlpOptions = {
                 f: formatStr,
-                o: outputPath,
-                'extractor-args': 'youtube:player_client=tv_embedded,android_creator;player_skip=webpage,configs' // Last resort datacenter bypass
+                o: outputPath
             };
+
+            let cookiesPath = null;
+            if (process.env.YOUTUBE_COOKIES) {
+                cookiesPath = path.join(tempDir, 'youtube_cookies.txt');
+                let cookiesContent = process.env.YOUTUBE_COOKIES;
+                // Handle cases where newlines are literal \n strings from env variables
+                if (cookiesContent.includes('\\n')) {
+                    cookiesContent = cookiesContent.replace(/\\n/g, '\n');
+                }
+                if (!fs.existsSync(cookiesPath)) {
+                    fs.writeFileSync(cookiesPath, cookiesContent);
+                }
+                ytDlpOptions.cookies = cookiesPath;
+                console.log("[Decoder] Using injected YouTube Cookies for authentication.");
+            } else {
+                // Fallback to strict API bypass if no cookies are provided
+                ytDlpOptions['extractor-args'] = 'youtube:player_client=tv_embedded,android_creator;player_skip=webpage,configs';
+                console.log("[Decoder] No cookies found. Attempting anonymous API bypass.");
+            }
 
             const ytdlProcess = youtubedl(`https://www.youtube.com/watch?v=${videoId}`, ytDlpOptions);
 
