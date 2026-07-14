@@ -17,7 +17,10 @@ const upload = multer({
     limits: { fileSize: 5 * 1024 * 1024 * 1024 } // 5GB limit
 });
 
-router.post('/upload', verifyFirebaseToken, upload.single('file'), uploadFile);
+router.post('/upload', verifyFirebaseToken, (req, res, next) => {
+    console.log(`[Upload Route] Incoming POST request. Content-Length: ${req.headers['content-length']}`);
+    next();
+}, upload.single('file'), uploadFile);
 router.get('/', verifyFirebaseToken, listFiles);
 router.get('/search', verifyFirebaseToken, searchFiles);
 router.delete('/:fileId', verifyFirebaseToken, deleteFile);

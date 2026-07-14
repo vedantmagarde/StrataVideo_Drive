@@ -9,6 +9,7 @@ import { getValidToken, getValidTokenById, getOAuth2Client, getAllAvailableAccou
 import { activeJobs } from '../utils/activeJobs.js';
 
 export const uploadFile = async (req, res) => {
+    console.log(`[FileController] uploadFile started. File received: ${req.file ? req.file.originalname : 'none'}`);
     try {
         const { email } = req.user;
         const file = req.file;
