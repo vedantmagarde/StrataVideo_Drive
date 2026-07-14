@@ -35,7 +35,8 @@ export const downloadVideo = async (videoId, accountId, tempDir, jobId, needsAud
             const formatStr = needsAudio ? 'best[ext=mp4]/best' : 'bestvideo[ext=mp4]';
             const ytDlpOptions = {
                 f: formatStr,
-                o: outputPath
+                o: outputPath,
+                'extractor-args': 'youtube:player_client=android' // Bypasses Render IP blocks and 429 Too Many Requests errors
             };
 
             const ytdlProcess = youtubedl(`https://www.youtube.com/watch?v=${videoId}`, ytDlpOptions);

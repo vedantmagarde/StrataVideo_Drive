@@ -143,10 +143,17 @@ To ensure enterprise-grade stability and security, we have recently solidified t
 - ✅ **Encoder:** Read file in 50MB chunks -> stream raw RGBA pixels to `ffmpeg.stdin` -> Output MP4.
 - ✅ **Decoder:** `yt-dlp` download -> FFmpeg extract rawvideo -> decrypt -> reassemble.
 
-### 🟧 Phase 5 — Upload / Download Job Queue
-- ✅ Implemented `bull` message queue backed by Upstash Redis.
-- ✅ `uploadWorker` handles async encoding and rate-limited uploading.
-- ✅ `downloadWorker` handles async downloading, decoding, and writing to `/tmp`.
+### 🟧 Phase 8: Deployment & Hardening (COMPLETED)
+- [x] Configure CORS to dynamically handle trailing slashes and origin mismatches.
+- [x] Configure Express `keepAliveTimeout` and `headersTimeout` to `120s` to prevent Render load balancer from dropping uploads after 5 seconds.
+- [x] Add global Request Loggers to track traffic bypassing Render's Cloudflare shield.
+- [x] Bypass YouTube Datacenter IP blocks (HTTP 429 "Sign in to confirm you're not a bot") in `yt-dlp` using the Android API player client extractor.
+- [x] Add React SPA Rewrite rules (`/*` -> `/index.html`) on Render to prevent "Not Found" on page reloads and OAuth redirects.
+
+## Phase 9: Native Video Player (Next Steps)
+- [ ] Implement video streaming directly from YouTube chunks.
+- [ ] Add chunk buffering logic to the UI.
+- [ ] Create a custom video player UI.
 
 ### 🟫 Phase 6 — File Metadata & Dashboard
 - ✅ `GET /api/files` with MIME-type filtering capabilities.
