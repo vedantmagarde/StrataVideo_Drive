@@ -1,4 +1,4 @@
-FROM node:20-bullseye
+FROM node:20-bookworm
 
 # Install dependencies: ffmpeg for video encoding/decoding, python3 and pip for yt-dlp
 RUN apt-get update && apt-get install -y \
@@ -9,7 +9,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Install latest yt-dlp via pip3 (busting the Docker cache)
-RUN pip3 install --upgrade yt-dlp
+RUN pip3 install --upgrade yt-dlp --break-system-packages
 
 # Create manual symlink for python
 RUN ln -s /usr/bin/python3 /usr/bin/python || true
