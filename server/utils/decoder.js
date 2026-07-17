@@ -11,7 +11,7 @@ import { activeJobs } from './activeJobs.js';
 
 const ytDlpBinary = process.platform === 'win32'
     ? path.join(os.homedir(), 'AppData', 'Roaming', 'Python', 'Python312', 'Scripts', 'yt-dlp.exe')
-    : 'yt-dlp';
+    : path.resolve('./yt-dlp');
 
 const youtubedl = create(ytDlpBinary);
 
