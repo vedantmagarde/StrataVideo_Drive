@@ -87,7 +87,7 @@ export const renderFramesToVideo = (bits, outputPath, jobId, onProgress) => {
             '-map', '1:a',
             '-c:v', 'libx264',
             '-crf', '18',
-            '-preset', 'veryfast',
+            '-preset', 'ultrafast',
             '-pix_fmt', 'yuv420p',
             '-shortest',
             outputPath
