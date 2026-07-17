@@ -56,10 +56,10 @@ const LoginPage = () => {
             </nav>
 
             {/* Main Content */}
-            <main className="relative z-10 flex-grow flex flex-col items-center justify-center px-4 w-full max-w-7xl mx-auto py-12 lg:py-24">
+            <main className="relative z-10 flex-grow flex flex-col items-center pt-16 lg:pt-24 pb-12 px-4 w-full max-w-7xl mx-auto">
                 
                 {/* Hero Section */}
-                <div className="text-center max-w-4xl mx-auto mb-20">
+                <div className="text-center max-w-4xl mx-auto mb-16">
                     <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-indigo-50 border border-indigo-100 text-indigo-700 text-sm font-medium mb-8">
                         <Zap className="w-4 h-4" />
                         <span>Built with Node.js, React, & FFmpeg</span>
