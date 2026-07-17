@@ -56,28 +56,28 @@ const LoginPage = () => {
             </nav>
 
             {/* Main Content */}
-            <main className="relative z-10 flex-grow flex flex-col items-center pt-16 lg:pt-24 pb-12 px-4 w-full max-w-7xl mx-auto">
-                
+            <main className="relative z-10 flex-grow flex flex-col items-center pt-4 lg:pt-8 pb-12 px-4 w-full max-w-7xl mx-auto">
+
                 {/* Hero Section */}
                 <div className="text-center max-w-4xl mx-auto mb-16">
                     <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-indigo-50 border border-indigo-100 text-indigo-700 text-sm font-medium mb-8">
                         <Zap className="w-4 h-4" />
                         <span>Built with Node.js, React, & FFmpeg</span>
                     </div>
-                    
+
                     <h1 className="text-5xl md:text-7xl font-extrabold text-slate-900 tracking-tight mb-8 leading-tight">
-                        Limitless Cloud Storage <br/>
+                        Limitless Cloud Storage <br />
                         <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600">
                             Powered by YouTube.
                         </span>
                     </h1>
-                    
+
                     <p className="text-xl text-slate-600 mb-12 max-w-2xl mx-auto leading-relaxed">
                         StrataVideo Drive leverages YouTube's limitless video hosting as a distributed, encrypted file system. Engineered to bypass datacenter limits using an advanced hybrid architecture.
                     </p>
 
                     <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-                        <button 
+                        <button
                             onClick={handleLogin}
                             className="group relative flex items-center gap-3 px-8 py-4 bg-white text-slate-700 border border-slate-200 rounded-xl font-bold text-lg hover:bg-slate-50 hover:border-slate-300 transition-all duration-300 shadow-sm hover:shadow-md transform hover:-translate-y-0.5"
                         >
@@ -94,42 +94,42 @@ const LoginPage = () => {
 
                 {/* Features Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full">
-                    <FeatureCard 
+                    <FeatureCard
                         icon={Shield}
                         title="AES-256 Encryption"
                         description="Every file is heavily encrypted client-side before being converted to pixel data. Zero-knowledge architecture ensures YouTube cannot analyze or flag the underlying binary."
                     />
-                    <FeatureCard 
+                    <FeatureCard
                         icon={Network}
                         title="Distributed Sharding"
                         description="Files are split into mathematically perfect chunks and distributed across a network of connected YouTube channels to bypass quota limits and prevent single points of failure."
                     />
-                    <FeatureCard 
+                    <FeatureCard
                         icon={Layers}
                         title="Reed-Solomon ECC"
                         description="Engineered with advanced error correction. Even if YouTube compresses the video or drops frames, mathematical parity chunks allow perfect 1:1 reconstruction of the original file."
                     />
-                    <FeatureCard 
+                    <FeatureCard
                         icon={HardDrive}
                         title="Limitless Capacity"
                         description="By exploiting video hosting infrastructure as a binary data store, the system unlocks theoretically limitless cloud storage without monthly subscription fees."
                     />
-                    <FeatureCard 
+                    <FeatureCard
                         icon={Lock}
                         title="Anti-Bot Bypass"
                         description="Utilizes an injected js-runtime environment and ejs:github solvers within yt-dlp to dynamically resolve YouTube's JavaScript n-challenges and CAPTCHAs."
                     />
-                    <FeatureCard 
+                    <FeatureCard
                         icon={Zap}
                         title="BullMQ Processing"
                         description="Heavy lifting is offloaded to background Node.js worker threads using Redis-backed Bull queues, ensuring the UI remains highly responsive during complex encodings."
                     />
                 </div>
             </main>
-            
+
             {/* Footer */}
             <footer className="relative z-10 w-full text-center py-8 text-slate-500 text-sm">
-                <p>Engineered by Vedant Magarde. Not affiliated with Google or YouTube.</p>
+                <p>Engineered by Vedant .</p>
             </footer>
         </div>
     );
