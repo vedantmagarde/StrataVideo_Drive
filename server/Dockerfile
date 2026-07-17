@@ -8,8 +8,8 @@ RUN apt-get update && apt-get install -y \
     python-is-python3 \
     && rm -rf /var/lib/apt/lists/*
 
-# Install yt-dlp via pip3
-RUN pip3 install yt-dlp
+# Install latest yt-dlp via pip3 (busting the Docker cache)
+RUN pip3 install --upgrade yt-dlp
 
 # Create manual symlink for python
 RUN ln -s /usr/bin/python3 /usr/bin/python || true
