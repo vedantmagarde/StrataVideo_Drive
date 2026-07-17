@@ -19,9 +19,8 @@ if (!fs.existsSync(tmpDir)) {
 
 
 import "./jobs/uploadWorker.js";
-// We are disabling the cloud download worker because YouTube permanently blocks Datacenter IPs.
-// Downloads will now be processed by the Local Desktop Sync Node.
-// import "./jobs/downloadWorker.js";
+// The Cloud Download Worker has been restored with ejs-github yt-dlp fix
+import "./jobs/downloadWorker.js";
 import "./jobs/quotaReset.js";
 import "./jobs/tmpCleanup.js";
 
