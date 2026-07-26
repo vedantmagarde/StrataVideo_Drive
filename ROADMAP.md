@@ -1,6 +1,6 @@
 <!-- StrataVideo Drive -->
 
-# 📹 YTVault — Limitless Cloud Storage using YouTube
+# 📹 StrataVideo Drive— Limitless Cloud Storage using YouTube
 
 **YTVault** is a MERN-stack application that provides limitless, free cloud storage by treating YouTube as a backend file system. Users connect their YouTube accounts via OAuth2, and files are encrypted, chunked, encoded into black-and-white block videos using FFmpeg, and uploaded as unlisted videos. Only lightweight metadata is stored in MongoDB.
 
